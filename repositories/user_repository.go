@@ -1,4 +1,4 @@
-package authentication
+package repositories
 
 import (
 	"SmartLib_Likod/database"

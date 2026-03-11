@@ -1,4 +1,4 @@
-package authentication
+package services
 
 import (
 	"crypto/rand"
@@ -8,6 +8,7 @@ import (
 
 	"SmartLib_Likod/model"
 	"SmartLib_Likod/model/status"
+	"SmartLib_Likod/repositories"
 	"SmartLib_Likod/utils"
 )
 
@@ -36,7 +37,7 @@ type ResetPasswordInput struct {
 }
 
 func RegisterUser(input RegisterInput) (*model.User, error) {
-	existing, err := FindUserByEmailOrSchoolID(input.Email, input.SchoolID)
+	existing, err := repositories.FindUserByEmailOrSchoolID(input.Email, input.SchoolID)
 	if err == nil && existing.ID != 0 {
 		return nil, errors.New("Email or school ID already registered")
 	}
@@ -57,7 +58,7 @@ func RegisterUser(input RegisterInput) (*model.User, error) {
 		Password:  hashedPassword,
 	}
 
-	if err := CreateUser(user); err != nil {
+	if err := repositories.CreateUser(user); err != nil {
 		return nil, errors.New("Failed to create user")
 	}
 
@@ -65,7 +66,7 @@ func RegisterUser(input RegisterInput) (*model.User, error) {
 }
 
 func SigninUser(input SigninInput) (*model.User, error) {
-	user, err := FindUserByEmailOrSchoolID(input.Identifier, input.Identifier)
+	user, err := repositories.FindUserByEmailOrSchoolID(input.Identifier, input.Identifier)
 	if err != nil {
 		return nil, errors.New("Invalid credentials")
 	}
@@ -86,7 +87,7 @@ func SigninUser(input SigninInput) (*model.User, error) {
 }
 
 func ForgotPasswordService(input ForgotPasswordInput) error {
-	user, err := FindUserByEmailOrSchoolID(input.Identifier, input.Identifier)
+	user, err := repositories.FindUserByEmailOrSchoolID(input.Identifier, input.Identifier)
 	if err != nil {
 		return nil
 	}
@@ -100,11 +101,11 @@ func ForgotPasswordService(input ForgotPasswordInput) error {
 	reset := &model.PasswordReset{
 		UserID:    user.ID,
 		Token:     token,
-		ExpiresAt: time.Now().Add(1 * time.Hour),
+		ExpiresAt: time.Now().Add(10 * time.Minute),
 		Used:      false,
 	}
 
-	if err := CreatePasswordReset(reset); err != nil {
+	if err := repositories.CreatePasswordReset(reset); err != nil {
 		return errors.New("Failed to create reset token")
 	}
 
@@ -116,7 +117,7 @@ func ForgotPasswordService(input ForgotPasswordInput) error {
 }
 
 func ResetPasswordService(input ResetPasswordInput) error {
-	reset, err := FindPasswordResetByToken(input.Token)
+	reset, err := repositories.FindPasswordResetByToken(input.Token)
 	if err != nil {
 		return errors.New("Invalid or expired reset link")
 	}
@@ -134,9 +135,9 @@ func ResetPasswordService(input ResetPasswordInput) error {
 		return errors.New("Failed to process password")
 	}
 
-	if err := UpdateUserPassword(reset.UserID, hashedPassword); err != nil {
+	if err := repositories.UpdateUserPassword(reset.UserID, hashedPassword); err != nil {
 		return errors.New("Failed to update password")
 	}
 
-	return MarkTokenUsed(input.Token)
+	return repositories.MarkTokenUsed(input.Token)
 }

@@ -1,16 +1,16 @@
 package handler
 
 import (
-	"SmartLib_Likod/authentication"
 	errormodel "SmartLib_Likod/model/error"
 	"SmartLib_Likod/model/response"
 	"SmartLib_Likod/model/status"
+	"SmartLib_Likod/services"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 func Register(c *fiber.Ctx) error {
-	var input authentication.RegisterInput
+	var input services.RegisterInput
 
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
@@ -36,7 +36,7 @@ func Register(c *fiber.Ctx) error {
 		})
 	}
 
-	user, err := authentication.RegisterUser(input)
+	user, err := services.RegisterUser(input)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
 			Message:   err.Error(),
@@ -53,7 +53,7 @@ func Register(c *fiber.Ctx) error {
 }
 
 func Signin(c *fiber.Ctx) error {
-	var input authentication.SigninInput
+	var input services.SigninInput
 
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
@@ -71,7 +71,7 @@ func Signin(c *fiber.Ctx) error {
 		})
 	}
 
-	user, err := authentication.SigninUser(input)
+	user, err := services.SigninUser(input)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(errormodel.ErrorModel{
 			Message:   err.Error(),
@@ -88,7 +88,7 @@ func Signin(c *fiber.Ctx) error {
 }
 
 func ForgotPassword(c *fiber.Ctx) error {
-	var input authentication.ForgotPasswordInput
+	var input services.ForgotPasswordInput
 
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
@@ -106,7 +106,7 @@ func ForgotPassword(c *fiber.Ctx) error {
 		})
 	}
 
-	authentication.ForgotPasswordService(input)
+	services.ForgotPasswordService(input)
 
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
 		RetCode: "200",
@@ -116,7 +116,7 @@ func ForgotPassword(c *fiber.Ctx) error {
 }
 
 func ResetPassword(c *fiber.Ctx) error {
-	var input authentication.ResetPasswordInput
+	var input services.ResetPasswordInput
 
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
@@ -134,7 +134,7 @@ func ResetPassword(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := authentication.ResetPasswordService(input); err != nil {
+	if err := services.ResetPasswordService(input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
 			Message:   err.Error(),
 			IsSuccess: false,
