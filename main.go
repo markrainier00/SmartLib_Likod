@@ -26,6 +26,7 @@ func main() {
 		&model.Transaction{},
 		&model.Penalty{},
 		&model.OTPCode{},
+		&model.School{},
 	)
 	if err != nil {
 		log.Fatal("Migration Failed: ", err)

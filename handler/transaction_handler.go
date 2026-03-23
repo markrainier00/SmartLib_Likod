@@ -1,6 +1,10 @@
 package handler
 
 import (
+	errormodel "SmartLib_Likod/model/error"
+	"SmartLib_Likod/model/response"
+
+	// "SmartLib_Likod/model/status"
 	"SmartLib_Likod/repositories"
 	"SmartLib_Likod/services"
 
@@ -20,12 +24,20 @@ func BorrowBook(c *fiber.Ctx) error {
 	return c.Status(201).JSON(fiber.Map{"message": "Request sent to Staff!", "isSuccess": true})
 }
 
-func GetAllPending(c *fiber.Ctx) error {
-	requests, err := repositories.GetAllRequests()
+func GetAllRequests(c *fiber.Ctx) error {
+	requests, err := services.GetAllRequestsService()
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"message": "Database error", "isSuccess": false})
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch requests",
+			IsSuccess: false,
+			Error:     err,
+		})
 	}
-	return c.JSON(fiber.Map{"isSuccess": true, "data": requests})
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Requests fetched successfully",
+		Data:    requests,
+	})
 }
 
 func GetDashboardStats(c *fiber.Ctx) error {
@@ -37,18 +49,6 @@ func GetDashboardStats(c *fiber.Ctx) error {
 			"activeBorrows":        repositories.GetActiveBorrowCount(),
 		},
 	})
-}
-
-func GetStudentHistory(c *fiber.Ctx) error {
-	schoolID := c.Query("school_id")
-	if schoolID == "" {
-		return c.Status(400).JSON(fiber.Map{"message": "School ID required", "isSuccess": false})
-	}
-	history, err := repositories.GetTransactionHistory(schoolID)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"message": "History fetch failed", "isSuccess": false})
-	}
-	return c.JSON(fiber.Map{"isSuccess": true, "data": history})
 }
 
 func ReleaseBook(c *fiber.Ctx) error {

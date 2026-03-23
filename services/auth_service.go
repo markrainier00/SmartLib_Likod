@@ -8,10 +8,13 @@ import (
 	"math/big"
 	"time"
 
+	"SmartLib_Likod/database"
 	"SmartLib_Likod/model"
 	"SmartLib_Likod/model/status"
 	"SmartLib_Likod/repositories"
 	"SmartLib_Likod/utils"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type SendOTPInput struct {
@@ -32,6 +35,7 @@ type RegisterInput struct {
 	LastName      string `json:"lastname"`
 	Email         string `json:"email"`
 	SchoolID      string `json:"school_id"`
+	Department    string `json:"department"`
 	Program       string `json:"program"`
 	Year          string `json:"year"`
 	Password      string `json:"password"`
@@ -50,6 +54,11 @@ type ForgotPasswordInput struct {
 type ResetPasswordInput struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
+}
+
+type ChangePasswordInput struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
 }
 
 func SendOTPService(input SendOTPInput) error {
@@ -105,11 +114,17 @@ func CheckSchoolIDService(input CheckSchoolIDInput) error {
 
 	return nil
 }
-func RegisterUser(input RegisterInput) (*model.User, error) {
-	existing, err := repositories.FindUserByEmailOrSchoolID(input.Email, input.SchoolID)
-	if err == nil && existing.ID != 0 {
-		return nil, errors.New("Email or school ID already registered")
+
+func GetSchoolsService() ([]model.School, error) {
+	var schools []model.School
+	result := database.DB.Find(&schools)
+	if result.Error != nil {
+		return nil, result.Error
 	}
+	return schools, nil
+}
+
+func RegisterUser(input RegisterInput) (*model.User, error) {
 
 	hashedPassword, err := utils.HashPassword(input.Password)
 	if err != nil {
@@ -117,13 +132,15 @@ func RegisterUser(input RegisterInput) (*model.User, error) {
 	}
 
 	user := &model.User{
+		Role:          status.RoleStudent,
 		FirstName:     input.FirstName,
 		LastName:      input.LastName,
 		Email:         input.Email,
 		SchoolID:      input.SchoolID,
+		Department:    input.Department,
 		Program:       input.Program,
 		Year:          input.Year,
-		Status:        status.UserStatusNew,
+		Status:        status.UserStatusPending,
 		Password:      hashedPassword,
 		SchoolIDImage: input.SchoolIDImage,
 	}
@@ -145,7 +162,7 @@ func SigninUser(input SigninInput) (*model.User, error) {
 		return nil, errors.New("Invalid credentials")
 	}
 
-	if user.Status == status.UserStatusNew {
+	if user.Status == status.UserStatusPending {
 		return nil, errors.New("Your account is not yet approved by the admin.")
 	} else if user.Status == status.UserStatusLocked {
 		return nil, errors.New("Your account has been locked, please contact the admin.")
@@ -210,4 +227,26 @@ func ResetPasswordService(input ResetPasswordInput) error {
 	}
 
 	return repositories.MarkTokenUsed(input.Token)
+}
+
+func ChangePasswordService(userID uint, input ChangePasswordInput) error {
+	var user model.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.CurrentPassword)); err != nil {
+		return errors.New("Current password is incorrect")
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("Failed to hash password")
+	}
+
+	if err := database.DB.Model(&user).Update("password", string(hashed)).Error; err != nil {
+		return errors.New("Failed to update password")
+	}
+
+	return nil
 }

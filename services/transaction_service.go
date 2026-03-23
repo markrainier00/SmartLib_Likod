@@ -21,10 +21,10 @@ func BorrowBookService(input BorrowInput) error {
 	}
 
 	tx := &model.Transaction{
-		SchoolID:   input.SchoolID,
-		BookTitle:  input.BookTitle,
-		Status:     "Pending",
-		PickupDate: input.PickupDate,
+		SchoolID:  input.SchoolID,
+		BookTitle: input.BookTitle,
+		Status:    "Pending",
+		// PickupDate: input.PickupDate,
 		ReturnDate: input.ReturnDate,
 	}
 

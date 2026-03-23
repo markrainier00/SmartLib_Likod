@@ -54,7 +54,7 @@ func RegisterUser(input RegisterInput) (*model.User, error) {
 		SchoolID:  input.SchoolID,
 		Program:   input.Program,
 		Year:      input.Year,
-		Status:    status.UserStatusNew,
+		Status:    status.UserStatusPending,
 		Password:  hashedPassword,
 	}
 
@@ -75,7 +75,7 @@ func SigninUser(input SigninInput) (*model.User, error) {
 		return nil, errors.New("invalid credentials")
 	}
 
-	if user.Status == status.UserStatusNew {
+	if user.Status == status.UserStatusPending {
 		return nil, errors.New("your account is not yet approved by the admin")
 	} else if user.Status == status.UserStatusLocked {
 		return nil, errors.New("your account has been locked, please contact the admin")
