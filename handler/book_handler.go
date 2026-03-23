@@ -10,7 +10,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// GetAllBooks - Kinukuha ang mga libro sa Supabase
+// ==========================================
+// 🚀 GET: KUNIN LAHAT NG LIBRO
+// ==========================================
 func GetAllBooks(c *fiber.Ctx) error {
 	var books []model.Book
 	if err := database.DB.Find(&books).Error; err != nil {
@@ -25,7 +27,9 @@ func GetAllBooks(c *fiber.Ctx) error {
 	})
 }
 
-// AddBook - Nagse-save ng bagong libro mula sa Admin papunta sa Supabase
+// ==========================================
+// 🚀 POST: MAG-ADD NG BAGONG LIBRO
+// ==========================================
 func AddBook(c *fiber.Ctx) error {
 	book := new(model.Book)
 
@@ -37,13 +41,12 @@ func AddBook(c *fiber.Ctx) error {
 		})
 	}
 
-	// 👁️ CCTV: I-print sa terminal kung ano yung natanggap mula sa Next.js
+	// 👁️ CCTV: I-print sa terminal kung ano yung natanggap
 	fmt.Printf("📦 TANGKANG I-SAVE NA LIBRO: %+v\n", book)
 
-	// 2. 🚀 I-SAVE SA SUPABASE
+	// 2. I-SAVE SA SUPABASE
 	result := database.DB.Create(&book)
 	if result.Error != nil {
-		// Kapag nag-error ang Supabase, i-print sa terminal ang dahilan!
 		fmt.Println("🚨 SUPABASE SAVE ERROR:", result.Error)
 		return c.Status(500).JSON(fiber.Map{
 			"isSuccess": false,
@@ -62,9 +65,55 @@ func AddBook(c *fiber.Ctx) error {
 	})
 }
 
-// DeleteBook - Binubura ang libro sa Supabase gamit ang ID
-func DeleteBook(c *fiber.Ctx) error {
+// ==========================================
+// 🚀 PUT: MAG-UPDATE NG EXISTING NA LIBRO
+// ==========================================
+func UpdateBook(c *fiber.Ctx) error {
 	id := c.Params("id") // Kukunin ang ID mula sa URL (halimbawa: /api/books/1)
+	var book model.Book
+
+	// 1. Hanapin muna kung nag-e-exist yung libro sa database
+	if err := database.DB.First(&book, id).Error; err != nil {
+		fmt.Println("🚨 BOOK NOT FOUND SA PAG-UPDATE. ID:", id)
+		return c.Status(404).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Book not found",
+		})
+	}
+
+	// 2. Basahin ang bagong data na pinadala ng Frontend at i-overwrite ang lumang data
+	if err := c.BodyParser(&book); err != nil {
+		fmt.Println("🚨 Error sa Body Parser (Update):", err)
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid input data",
+		})
+	}
+
+	// 3. I-save ang mga pagbabago sa Supabase
+	result := database.DB.Save(&book)
+	if result.Error != nil {
+		fmt.Println("🚨 SUPABASE UPDATE ERROR:", result.Error)
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Failed to update book",
+		})
+	}
+
+	fmt.Println("✅ SUCCESS! NA-UPDATE ANG LIBRO SA SUPABASE. ID:", id)
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"message":   "Book updated successfully!",
+		"data":      book,
+	})
+}
+
+// ==========================================
+// 🚀 DELETE: BURAHIN ANG LIBRO
+// ==========================================
+func DeleteBook(c *fiber.Ctx) error {
+	id := c.Params("id") // Kukunin ang ID mula sa URL
 
 	// 👁️ CCTV: Tingnan natin kung anong ID ang gustong burahin
 	fmt.Println("🗑️ TANGKANG BURAHIN ANG LIBRO. ID:", id)
