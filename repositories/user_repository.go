@@ -71,3 +71,45 @@ func UpdateUserPassword(UserID uint, hashedPassword string) error {
 func MarkTokenUsed(token string) error {
 	return database.DB.Model(&model.PasswordReset{}).Where("token = ?", token).Update("used", true).Error
 }
+
+// ==========================================
+// 🚀 BAGONG DAGDAG: ADMIN REGISTRATION APPROVALS
+// ==========================================
+
+// GetAllRegistrations - Kinukuha lahat ng nag-register
+func GetAllRegistrations() ([]model.User, error) {
+	var users []model.User
+	err := database.DB.Order("created_at desc").Find(&users).Error
+	return users, err
+}
+
+// UpdateUserStatus - Para ma-Approve (Active) o ma-Reject (Rejected)
+func UpdateUserStatus(schoolID string, status string, rejectReason string) error {
+	return database.DB.Model(&model.User{}).
+		Where("school_id = ?", schoolID).
+		Updates(map[string]interface{}{
+			"status":        status,
+			"reject_reason": rejectReason,
+		}).Error
+}
+
+// ==========================================
+// 🚀 BAGONG DAGDAG: MANAGE ACCOUNTS (LOCK/UNLOCK & DELETE)
+// ==========================================
+
+// UpdateAccountStatus - Para sa Lock at Unlock (Admin manual action)
+func UpdateAccountStatus(schoolID string, status string) error {
+	updates := map[string]interface{}{"status": status}
+
+	// Kung i-u-unlock ng Admin, i-reset natin ang penalty to 0 para may fresh start ang estudyante
+	if status == "Active" {
+		updates["penalty_count"] = 0
+	}
+
+	return database.DB.Model(&model.User{}).Where("school_id = ?", schoolID).Updates(updates).Error
+}
+
+// DeleteUserBySchoolID - Para mabura ang record ng pasaway na student
+func DeleteUserBySchoolID(schoolID string) error {
+	return database.DB.Where("school_id = ?", schoolID).Delete(&model.User{}).Error
+}
