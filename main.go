@@ -11,7 +11,7 @@ import (
 	"SmartLib_Likod/middleware"
 	"SmartLib_Likod/model"
 	"SmartLib_Likod/routes"
-	"SmartLib_Likod/services" // 🚀 BAGONG DAGDAG: Import para sa background services
+	"SmartLib_Likod/services"
 )
 
 func main() {
@@ -21,7 +21,6 @@ func main() {
 
 	database.ConnectDB()
 
-	// 🚀 DITO NATIN IDINAGDAG YUNG BOOK AT CONCERN MODELS
 	err := database.DB.AutoMigrate(
 		&model.User{},
 		&model.PasswordReset{},
@@ -29,16 +28,13 @@ func main() {
 		&model.Penalty{},
 		&model.OTPCode{},
 		&model.School{},
-		&model.Book{},    // 👈 Siguraduhin nating may table na rin ang mga Libro
-		&model.Concern{}, // 👈 Ito 'yung ginawa natin ngayon para sa Student Concerns!
+		&model.Book{},
+		&model.Concern{},
 	)
 	if err != nil {
 		log.Fatal("Migration Failed: ", err)
 	}
 
-	// ==========================================
-	// 🚀 BUHAYIN ANG BACKGROUND CHECKER DITO
-	// Tumatakbo ito sa background para mag-check ng Overdue at mag-Auto Lock
 	// ==========================================
 	services.StartDailyPenaltyChecker()
 

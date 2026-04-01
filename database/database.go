@@ -25,7 +25,6 @@ func ConnectDB() {
 			host, user, password, dbname, port)
 	}
 
-	// 🚀 STEP 3: Connect to Supabase
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to connect to database. Check your .env file! Error: ", err)
