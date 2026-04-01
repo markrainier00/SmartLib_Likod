@@ -22,7 +22,6 @@ func main() {
 
 	database.ConnectDB()
 
-	// 🚀 DITO NATIN IDINAGDAG YUNG BOOK AT CONCERN MODELS
 	err := database.DB.AutoMigrate(
 		&model.User{},
 		&model.PasswordReset{},
@@ -32,13 +31,13 @@ func main() {
 		&model.School{},
 		&model.Book{},
 		&model.Concern{},
+		&model.Book{},
+		&model.Concern{},
 	)
 	if err != nil {
 		log.Fatal("Migration Failed: ", err)
 	}
 
-	// ==========================================
-	// 🚀 MGA BACKGROUND SERVICES NG SMARTLIB
 	// ==========================================
 
 	// 1. Tumatakbo ito para mag-check ng Overdue at mag-Auto Lock

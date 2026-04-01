@@ -8,8 +8,8 @@ import (
 
 func SetupBooks(api fiber.Router) {
 	books := api.Group("/books")
-	books.Get("/", handler.GetAllBooks)
-	books.Post("/", handler.AddBook)
+	books.Get("/getBooks", handler.GetAllBooks)
+	books.Post("/addBook", handler.AddBookHandler)
 	books.Put("/:id", handler.UpdateBook)
 	books.Delete("/:id", handler.DeleteBook)
 }

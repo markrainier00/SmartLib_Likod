@@ -2,17 +2,20 @@ package handler
 
 import (
 	"fmt"
+	"os"
+	"time"
 
-	// "SmartLib_Likod/model/status"
 	"SmartLib_Likod/database"
 	"SmartLib_Likod/model"
+	errormodel "SmartLib_Likod/model/error"
+	"SmartLib_Likod/model/response"
+	"SmartLib_Likod/model/status"
+	"SmartLib_Likod/services"
 
 	"github.com/gofiber/fiber/v2"
+	storage_go "github.com/supabase-community/storage-go"
 )
 
-// ==========================================
-// 🚀 GET: KUNIN LAHAT NG LIBRO
-// ==========================================
 func GetAllBooks(c *fiber.Ctx) error {
 	var books []model.Book
 	if err := database.DB.Find(&books).Error; err != nil {
@@ -27,43 +30,117 @@ func GetAllBooks(c *fiber.Ctx) error {
 	})
 }
 
-// ==========================================
-// 🚀 POST: MAG-ADD NG BAGONG LIBRO
-// ==========================================
-func AddBook(c *fiber.Ctx) error {
-	book := new(model.Book)
+func AddBookHandler(c *fiber.Ctx) error {
+	var savedPath string
 
-	// 1. Basahin ang pinadala ng Frontend
-	if err := c.BodyParser(book); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"isSuccess": false,
-			"message":   "Invalid input data",
+	// 1. Handle image upload to Supabase Storage
+	file, err := c.FormFile("actual_image")
+	if err == nil {
+		src, err := file.Open()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+				Message:   "Failed to open image",
+				IsSuccess: false,
+				Error:     err,
+			})
+		}
+		defer src.Close()
+
+		client := storage_go.NewClient(
+			os.Getenv("DB_URL")+"/storage/v1",
+			os.Getenv("DB_SERVICE_KEY"),
+			nil,
+		)
+
+		filename := fmt.Sprintf("%d_%s", time.Now().Unix(), file.Filename)
+
+		_, err = client.UploadFile("book-covers", filename, src, storage_go.FileOptions{
+			ContentType: &file.Header["Content-Type"][0],
+		})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+				Message:   "Failed to upload image",
+				IsSuccess: false,
+				Error:     err,
+			})
+		}
+
+		savedPath = os.Getenv("DB_URL") + "/storage/v1/object/public/book-covers/" + filename
+	}
+
+	// 2. Build input
+	input := services.BookInput{
+		Title:           c.FormValue("title"),
+		Author:          c.FormValue("author"),
+		ISBN:            c.FormValue("isbn"),
+		Publisher:       c.FormValue("publisher"),
+		PublicationDate: c.FormValue("publication_date"),
+		Edition:         c.FormValue("edition"),
+		Category:        c.FormValue("category"),
+		Pages:           c.FormValue("pages"),
+		Copies:          c.FormValue("copies"),
+		Description:     c.FormValue("description"),
+		ActualImage:     savedPath,
+	}
+
+	// 3. Validate required fields
+	if input.Title == "" || input.Author == "" || input.ISBN == "" ||
+		input.Edition == "" || input.Pages == "" || input.Copies == "" || input.Description == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   status.RetCode401,
+			IsSuccess: false,
+			Error:     nil,
 		})
 	}
 
-	// 👁️ CCTV: I-print sa terminal kung ano yung natanggap
-	fmt.Printf("📦 TANGKANG I-SAVE NA LIBRO: %+v\n", book)
-
-	// 2. I-SAVE SA SUPABASE
-	result := database.DB.Create(&book)
-	if result.Error != nil {
-		fmt.Println("🚨 SUPABASE SAVE ERROR:", result.Error)
-		return c.Status(500).JSON(fiber.Map{
-			"isSuccess": false,
-			"message":   "Failed to save to database",
-			"error":     result.Error.Error(),
+	// 4. Call service
+	book, err := services.BookInputService(input)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   err.Error(),
+			IsSuccess: false,
+			Error:     err,
 		})
 	}
 
-	// 3. Success!
-	fmt.Println("✅ SUCCESS! PUMASOK SA SUPABASE ANG LIBRO. ID:", book.ID)
-
-	return c.JSON(fiber.Map{
-		"isSuccess": true,
-		"message":   "Book added successfully",
-		"data":      book,
+	// 5. Send response
+	return c.Status(fiber.StatusCreated).JSON(response.ResponseModel{
+		RetCode: "201",
+		Message: "Book added to the library.",
+		Data:    book,
 	})
 }
+
+// func AddBook(c *fiber.Ctx) error {
+// 	book := new(model.Book)
+
+// 	if err := c.BodyParser(book); err != nil {
+// 		return c.Status(400).JSON(fiber.Map{
+// 			"isSuccess": false,
+// 			"message":   "Invalid input data",
+// 		})
+// 	}
+
+// 	fmt.Printf("📦 TANGKANG I-SAVE NA LIBRO: %+v\n", book)
+
+// 	result := database.DB.Create(&book)
+// 	if result.Error != nil {
+// 		fmt.Println("🚨 SUPABASE SAVE ERROR:", result.Error)
+// 		return c.Status(500).JSON(fiber.Map{
+// 			"isSuccess": false,
+// 			"message":   "Failed to save to database",
+// 			"error":     result.Error.Error(),
+// 		})
+// 	}
+
+// 	fmt.Println("✅ SUCCESS! PUMASOK SA SUPABASE ANG LIBRO. ID:", book.ID)
+
+// 	return c.JSON(fiber.Map{
+// 		"isSuccess": true,
+// 		"message":   "Book added successfully",
+// 		"data":      book,
+// 	})
+// }
 
 // ==========================================
 // 🚀 PUT: MAG-UPDATE NG EXISTING NA LIBRO

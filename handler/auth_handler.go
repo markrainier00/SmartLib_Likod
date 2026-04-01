@@ -186,8 +186,8 @@ func RegisterHandler(c *fiber.Ctx) error {
 	}
 
 	// 3. Validate required fields
-	if input.FirstName == "" || input.LastName == "" || input.Email == "" ||
-		input.SchoolID == "" || input.Program == "" || input.Year == "" || input.Password == "" {
+	if input.FirstName == "" || input.LastName == "" || input.Email == "" || input.SchoolID == "" ||
+		input.Department == "" || input.Program == "" || input.Year == "" || input.Password == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
 			Message:   status.RetCode401,
 			IsSuccess: false,
