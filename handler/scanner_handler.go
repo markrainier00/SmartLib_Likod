@@ -27,7 +27,7 @@ func GetStudentScannerData(c *fiber.Ctx) error {
 	// I-extract ang mga title ng libro para madaling basahin ng Next.js
 	var pendingBooks []string
 	for _, t := range transactions {
-		pendingBooks = append(pendingBooks, t.BookTitle)
+		pendingBooks = append(pendingBooks, t.ISBN)
 	}
 
 	// 🚀 3. Kwentahin ang Unpaid Penalties (Mula sa Penalty model)

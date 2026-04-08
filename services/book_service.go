@@ -1,8 +1,6 @@
 package services
 
 import (
-	"errors"
-
 	"SmartLib_Likod/model"
 	"SmartLib_Likod/repositories"
 )
@@ -37,7 +35,7 @@ func BookInputService(input BookInput) (*model.Book, error) {
 	}
 
 	if err := repositories.AddBook(book); err != nil {
-		return nil, errors.New("Failed to create user")
+		return nil, err
 	}
 
 	return book, nil

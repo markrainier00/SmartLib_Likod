@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"SmartLib_Likod/database"
@@ -33,7 +34,6 @@ func GetAllBooks(c *fiber.Ctx) error {
 func AddBookHandler(c *fiber.Ctx) error {
 	var savedPath string
 
-	// 1. Handle image upload to Supabase Storage
 	file, err := c.FormFile("actual_image")
 	if err == nil {
 		src, err := file.Open()
@@ -68,7 +68,6 @@ func AddBookHandler(c *fiber.Ctx) error {
 		savedPath = os.Getenv("DB_URL") + "/storage/v1/object/public/book-covers/" + filename
 	}
 
-	// 2. Build input
 	input := services.BookInput{
 		Title:           c.FormValue("title"),
 		Author:          c.FormValue("author"),
@@ -83,7 +82,6 @@ func AddBookHandler(c *fiber.Ctx) error {
 		ActualImage:     savedPath,
 	}
 
-	// 3. Validate required fields
 	if input.Title == "" || input.Author == "" || input.ISBN == "" ||
 		input.Edition == "" || input.Pages == "" || input.Copies == "" || input.Description == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
@@ -93,9 +91,16 @@ func AddBookHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	// 4. Call service
 	book, err := services.BookInputService(input)
 	if err != nil {
+		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
+			return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+				Message:   "A book with this ISBN already exists.",
+				IsSuccess: false,
+				Error:     nil,
+			})
+		}
+
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
 			Message:   err.Error(),
 			IsSuccess: false,
@@ -103,86 +108,99 @@ func AddBookHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	// 5. Send response
 	return c.Status(fiber.StatusCreated).JSON(response.ResponseModel{
-		RetCode: "201",
-		Message: "Book added to the library.",
+		RetCode: "200",
 		Data:    book,
 	})
 }
 
-// func AddBook(c *fiber.Ctx) error {
-// 	book := new(model.Book)
-
-// 	if err := c.BodyParser(book); err != nil {
-// 		return c.Status(400).JSON(fiber.Map{
-// 			"isSuccess": false,
-// 			"message":   "Invalid input data",
-// 		})
-// 	}
-
-// 	fmt.Printf("📦 TANGKANG I-SAVE NA LIBRO: %+v\n", book)
-
-// 	result := database.DB.Create(&book)
-// 	if result.Error != nil {
-// 		fmt.Println("🚨 SUPABASE SAVE ERROR:", result.Error)
-// 		return c.Status(500).JSON(fiber.Map{
-// 			"isSuccess": false,
-// 			"message":   "Failed to save to database",
-// 			"error":     result.Error.Error(),
-// 		})
-// 	}
-
-// 	fmt.Println("✅ SUCCESS! PUMASOK SA SUPABASE ANG LIBRO. ID:", book.ID)
-
-// 	return c.JSON(fiber.Map{
-// 		"isSuccess": true,
-// 		"message":   "Book added successfully",
-// 		"data":      book,
-// 	})
-// }
-
-// ==========================================
-// 🚀 PUT: MAG-UPDATE NG EXISTING NA LIBRO
-// ==========================================
-func UpdateBook(c *fiber.Ctx) error {
-	id := c.Params("id") // Kukunin ang ID mula sa URL (halimbawa: /api/books/1)
+func UpdateBookHandler(c *fiber.Ctx) error {
+	id := c.Params("id")
 	var book model.Book
 
-	// 1. Hanapin muna kung nag-e-exist yung libro sa database
 	if err := database.DB.First(&book, id).Error; err != nil {
-		fmt.Println("🚨 BOOK NOT FOUND SA PAG-UPDATE. ID:", id)
 		return c.Status(404).JSON(fiber.Map{
 			"isSuccess": false,
-			"message":   "Book not found",
+			"message":   "Book not found.",
 		})
 	}
 
-	// 2. Basahin ang bagong data na pinadala ng Frontend at i-overwrite ang lumang data
-	if err := c.BodyParser(&book); err != nil {
-		fmt.Println("🚨 Error sa Body Parser (Update):", err)
+	var input struct {
+		Title           string `json:"title"`
+		Author          string `json:"author"`
+		ISBN            string `json:"isbn"`
+		Publisher       string `json:"publisher"`
+		PublicationDate string `json:"publication_date"`
+		Edition         string `json:"edition"`
+		Category        string `json:"category"`
+		Pages           string `json:"pages"`
+		Copies          string `json:"copies"`
+		Description     string `json:"description"`
+	}
+	if err := c.BodyParser(&input); err != nil {
 		return c.Status(400).JSON(fiber.Map{
 			"isSuccess": false,
 			"message":   "Invalid input data",
 		})
 	}
 
-	// 3. I-save ang mga pagbabago sa Supabase
+	book.Title = input.Title
+	book.Author = input.Author
+	book.ISBN = input.ISBN
+	book.Publisher = input.Publisher
+	book.PublicationDate = input.PublicationDate
+	book.Edition = input.Edition
+	book.Category = input.Category
+	book.Pages = input.Pages
+	book.Copies = input.Copies
+	book.Description = input.Description
+
+	file, err := c.FormFile("actual_image")
+	if err == nil {
+		src, err := file.Open()
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"isSuccess": false,
+				"message":   "Failed to open image",
+			})
+		}
+		defer src.Close()
+
+		client := storage_go.NewClient(os.Getenv("DB_URL")+"/storage/v1", os.Getenv("DB_SERVICE_KEY"), nil)
+		filename := fmt.Sprintf("%d_%s", time.Now().Unix(), file.Filename)
+
+		_, err = client.UploadFile("book-covers", filename, src, storage_go.FileOptions{
+			ContentType: &file.Header["Content-Type"][0],
+		})
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"isSuccess": false,
+				"message":   "Failed to upload image",
+			})
+		}
+
+		book.ActualImage = os.Getenv("DB_URL") + "/storage/v1/object/public/book-covers/" + filename
+	}
+
 	result := database.DB.Save(&book)
 	if result.Error != nil {
-		fmt.Println("🚨 SUPABASE UPDATE ERROR:", result.Error)
+		if strings.Contains(result.Error.Error(), "duplicate") || strings.Contains(result.Error.Error(), "unique") {
+			return c.Status(400).JSON(fiber.Map{
+				"isSuccess": false,
+				"message":   "A book with this ISBN already exists.",
+			})
+		}
+
 		return c.Status(500).JSON(fiber.Map{
 			"isSuccess": false,
 			"message":   "Failed to update book",
 		})
 	}
 
-	fmt.Println("✅ SUCCESS! NA-UPDATE ANG LIBRO SA SUPABASE. ID:", id)
-
-	return c.JSON(fiber.Map{
-		"isSuccess": true,
-		"message":   "Book updated successfully!",
-		"data":      book,
+	return c.Status(200).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Book updated successfully.",
+		Data:    book,
 	})
 }
 

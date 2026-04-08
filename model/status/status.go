@@ -2,9 +2,9 @@ package status
 
 const (
 	// API response
-	RetCode400 = "Unauthorized Request"
-	RetCode401 = "Invalid Request"
-	RetCode404 = "Bad Request"
+	RetCode400 = "Bad Request"
+	RetCode401 = "Unauthorized"
+	RetCode404 = "Not Found"
 	RetCode419 = "Authentication Timeout"
 	RetCode500 = "Internal Server Error"
 

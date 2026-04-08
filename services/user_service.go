@@ -5,8 +5,7 @@ import (
 )
 
 type StudentHistoryOutput struct {
-	BookTitle    string `json:"book_title"`
-	Author       string `json:"author"`
+	ISBN         string `json:"isbn"`
 	Status       string `json:"status"`
 	BorrowDate   string `json:"borrow_date"`
 	ReturnDate   string `json:"return_date"`
@@ -22,8 +21,7 @@ func GetStudentHistoryService(schoolID string) ([]StudentHistoryOutput, error) {
 	history := make([]StudentHistoryOutput, len(historyRecords))
 	for i, record := range historyRecords {
 		history[i] = StudentHistoryOutput{
-			BookTitle:    record.BookTitle,
-			Author:       record.Author,
+			ISBN:         record.ISBN,
 			Status:       record.Status,
 			BorrowDate:   record.BorrowDate,
 			ReturnDate:   record.ReturnDate,

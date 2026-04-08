@@ -30,6 +30,7 @@ func main() {
 		&model.School{},
 		&model.Book{},
 		&model.Concern{},
+		&model.Wishlist{},
 	)
 	if err != nil {
 		log.Fatal("Migration Failed: ", err)
