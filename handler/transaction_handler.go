@@ -12,6 +12,7 @@ import (
 	"SmartLib_Likod/repositories"
 
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 func RequestBook(c *fiber.Ctx) error {
@@ -69,23 +70,7 @@ func RequestBook(c *fiber.Ctx) error {
 // 	return c.Status(201).JSON(fiber.Map{"message": "Request sent to Staff!", "isSuccess": true})
 // }
 
-func GetAllRequests(c *fiber.Ctx) error {
-	requests, err := services.GetAllRequestsService()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
-			Message:   "Failed to fetch requests",
-			IsSuccess: false,
-			Error:     err,
-		})
-	}
-	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
-		RetCode: "200",
-		Message: "Requests fetched successfully",
-		Data:    requests,
-	})
-}
-
-func AddWishlist(c *fiber.Ctx) error {
+func AddWishlistHandler(c *fiber.Ctx) error {
 	var input services.WishlistInput
 
 	if err := c.BodyParser(&input); err != nil {
@@ -110,7 +95,7 @@ func AddWishlist(c *fiber.Ctx) error {
 	})
 }
 
-func RemoveWishlist(c *fiber.Ctx) error {
+func RemoveWishlistHandler(c *fiber.Ctx) error {
 	var input services.WishlistInput
 
 	if err := c.BodyParser(&input); err != nil {
@@ -135,7 +120,7 @@ func RemoveWishlist(c *fiber.Ctx) error {
 	})
 }
 
-func GetWishlist(c *fiber.Ctx) error {
+func GetWishlistHandler(c *fiber.Ctx) error {
 	schoolID := c.Params("school_id")
 
 	var wishlist []model.Wishlist
@@ -157,42 +142,99 @@ func GetWishlist(c *fiber.Ctx) error {
 	})
 }
 
-func ReleaseBook(c *fiber.Ctx) error {
-	type Req struct {
-		SchoolID      string `json:"school_id"`
-		TransactionID uint   `json:"transaction_id"` // Sasaluhin natin yung ID galing sa React
-	}
-	var body Req
-	if err := c.BodyParser(&body); err != nil {
-		return c.Status(400).JSON(fiber.Map{"message": "Invalid request", "isSuccess": false})
-	}
-
-	// 1. Kung galing sa bagong React Admin Dashboard (Gamit ang Transaction ID)
-	if body.TransactionID != 0 {
-		var tx model.Transaction
-		if err := database.DB.First(&tx, body.TransactionID).Error; err != nil {
-			return c.Status(404).JSON(fiber.Map{"isSuccess": false, "message": "Transaction not found"})
-		}
-		tx.Status = "Approved" // Ise-set natin as Approved
-		database.DB.Save(&tx)
-		return c.JSON(fiber.Map{"message": "Request approved!", "isSuccess": true})
+func GetBookBorrowRequestHandler(c *fiber.Ctx) error {
+	var transaction []model.Transaction
+	if err := database.DB.Where("status = ?", "Pending").
+		Order("created_at desc").
+		Find(&transaction).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Failed to fetch book borrow requests.",
+		})
 	}
 
-	// 2. Fallback sa lumang logic mo (Kung School ID ang ipinasa)
-	if err := services.ReleaseBookService(body.SchoolID); err != nil {
-		return c.Status(500).JSON(fiber.Map{"message": err.Error(), "isSuccess": false})
-	}
-	return c.JSON(fiber.Map{"message": "Book released!", "isSuccess": true})
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"data":      transaction,
+	})
 }
 
-func RejectBookHandler(c *fiber.Ctx) error {
+func GetActiveBorrowHandler(c *fiber.Ctx) error {
+	var transaction []model.Transaction
+	if err := database.DB.Where("status = ?", "Borrowed").
+		Order("created_at desc").
+		Find(&transaction).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Failed to fetch book borrow requests.",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"data":      transaction,
+	})
+}
+
+func ApproveRequestHandler(c *fiber.Ctx) error {
+	id := c.Params("id")
+	isbn := c.Params("isbn")
+
+	var transaction model.Transaction
+	var book model.Book
+
+	if err := database.DB.First(&transaction, id).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Request not found.",
+		})
+	}
+	if err := database.DB.Where("isbn = ?", isbn).First(&book).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Book not found.",
+		})
+	}
+	if book.Available <= 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "No copies available",
+		})
+	}
+
+	book.Available -= 1
+	transaction.Status = "Approved"
+	transaction.ApproveDate = time.Now()
+
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&transaction).Error; err != nil {
+			return err
+		}
+		if err := tx.Save(&book).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Failed to approve book borrow request",
+		})
+	}
+
+	return c.Status(200).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Book borrow request approved",
+	})
+}
+
+func RejectRequestHandler(c *fiber.Ctx) error {
 	id := c.Params("id")
 	var transaction model.Transaction
 
 	if err := database.DB.First(&transaction, id).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{
 			"isSuccess": false,
-			"message":   "Book not found.",
+			"message":   "Request not found.",
 		})
 	}
 
@@ -206,7 +248,7 @@ func RejectBookHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	transaction.RejectReason = input.RejectReason
+	transaction.RejectReason = c.FormValue("reject_reason")
 	transaction.Status = "Rejected"
 	transaction.RejectDate = time.Now()
 
@@ -214,43 +256,95 @@ func RejectBookHandler(c *fiber.Ctx) error {
 	if result.Error != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"isSuccess": false,
-			"message":   "Failed to update book",
+			"message":   "Failed to process book borrow request rejection.",
 		})
 	}
 
-	return c.JSON(fiber.Map{"isSuccess": true, "message": "Request rejected successfully"})
+	return c.Status(200).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Book borrow request rejected.",
+	})
 }
 
 func GetAllTransactions(c *fiber.Ctx) error {
 	var transactions []model.Transaction
 
-	// Kunin lahat ng transactions sa database, pinakabago muna
-	if err := database.DB.Order("created_at desc").Find(&transactions).Error; err != nil {
+	if err := database.DB.Order("created_at asc").Find(&transactions).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"isSuccess": false, "message": "Failed to fetch transactions"})
 	}
 
 	return c.JSON(fiber.Map{"isSuccess": true, "data": transactions})
 }
 
-func ReturnBook(c *fiber.Ctx) error {
-	type Req struct {
-		TransactionID uint `json:"transaction_id"`
-	}
-	var body Req
-	if err := c.BodyParser(&body); err != nil {
-		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "Invalid input"})
-	}
+func ReturnBookHandler(c *fiber.Ctx) error {
+	id := c.Params("id")
 
-	var tx model.Transaction
-	if err := database.DB.First(&tx, body.TransactionID).Error; err != nil {
-		return c.Status(404).JSON(fiber.Map{"isSuccess": false, "message": "Transaction not found"})
+	var transaction model.Transaction
+	if err := database.DB.First(&transaction, id).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Borrow not found.",
+		})
 	}
 
-	tx.Status = "Returned" // Papalitan ang status ng libro sa Returned
-
-	if err := database.DB.Save(&tx).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"isSuccess": false, "message": "Failed to update database"})
+	var user model.User
+	if err := database.DB.Where("school_id = ?", transaction.SchoolID).First(&user).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "User not found.",
+		})
 	}
 
-	return c.JSON(fiber.Map{"isSuccess": true, "message": "Book returned successfully"})
+	var input struct {
+		Violation      string `json:"violation"`
+		ViolationCount int    `json:"violation_count"`
+		OverduePoint   int    `json:"overdue_point"`
+	}
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid input data",
+		})
+	}
+
+	if input.ViolationCount < 0 || input.OverduePoint < 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "violation_count must be a valid number",
+		})
+	}
+
+	user.ViolationCount += input.ViolationCount
+	if input.ViolationCount > 0 {
+		user.OffenseCount += 1
+	}
+	transaction.Violation = input.Violation
+	if input.OverduePoint < 1 {
+		transaction.Status = "Returned"
+	} else {
+		transaction.Status = "Returned Late"
+	}
+	transaction.DateReturned = time.Now()
+
+	tx := database.DB.Begin()
+	if err := tx.Save(&user).Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Failed to process book borrow request rejection.",
+		})
+	}
+	if err := tx.Save(&transaction).Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Failed to process book borrow request rejection.",
+		})
+	}
+	tx.Commit()
+
+	return c.Status(200).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Book marked as returned.",
+	})
 }

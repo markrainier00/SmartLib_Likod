@@ -23,9 +23,9 @@ func GetStudentHistoryService(schoolID string) ([]StudentHistoryOutput, error) {
 		history[i] = StudentHistoryOutput{
 			ISBN:         record.ISBN,
 			Status:       record.Status,
-			BorrowDate:   record.BorrowDate,
-			ReturnDate:   record.ReturnDate,
-			DateReturned: record.DateReturned,
+			BorrowDate:   record.BorrowDate.Format("2006-01-02"),
+			ReturnDate:   record.ReturnDate.Format("2006-01-02"),
+			DateReturned: record.DateReturned.Format("2006-01-02"),
 		}
 	}
 
