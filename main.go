@@ -8,11 +8,9 @@ import (
 	"github.com/joho/godotenv"
 
 	"SmartLib_Likod/database"
-	"SmartLib_Likod/handler" // 🚀 BAGONG DAGDAG: Import para sa handler (Notifications)
 	"SmartLib_Likod/middleware"
 	"SmartLib_Likod/model"
 	"SmartLib_Likod/routes"
-	"SmartLib_Likod/services"
 )
 
 func main() {
@@ -37,24 +35,11 @@ func main() {
 		log.Fatal("Migration Failed: ", err)
 	}
 
-	// ==========================================
-
-	// 1. Tumatakbo ito para mag-check ng Overdue at mag-Auto Lock
-	services.StartDailyPenaltyChecker()
-
-	// 2. 🚀 BAGONG DAGDAG: Tumatakbo para sa Live Notifications (Registration/Penalty)
-	go handler.NotifHub.StartHub()
-
-	// ==========================================
-
 	app := fiber.New()
 
 	middleware.SetupCORS(app)
 
 	routes.Setup(app)
-
-	// 🚀 BAGONG DAGDAG: Ang SSE Endpoint para sa React Frontend
-	app.Get("/api/notifications", handler.SSEHandler)
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"message": "SmartLib API is running"})
