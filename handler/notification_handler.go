@@ -75,7 +75,8 @@ func SSEHandler(c *fiber.Ctx) error {
 	NotifHub.Register <- clientChan
 
 	// Kapag umalis na sa page yung user, i-disconnect natin
-	c.Context().SetConnectionClose(true)
+	// Na-apply na ang fix dito: inalis ang 'true'
+	c.Context().SetConnectionClose()
 
 	// Dito mangyayari ang walang-katapusang pagpapadala ng data (Streaming)
 	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
