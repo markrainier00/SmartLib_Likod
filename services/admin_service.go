@@ -1,187 +1,75 @@
 package services
 
 import (
-	"errors"
-	"time"
-
-	"SmartLib_Likod/database"
 	"SmartLib_Likod/model"
 	"SmartLib_Likod/model/status"
 	"SmartLib_Likod/repositories"
 	"SmartLib_Likod/utils"
+	"crypto/rand"
+	"errors"
+	"fmt"
+	"time"
 )
 
-type ApproveInput struct {
-	UserID uint `json:"user_id"`
+// CreateAdminInput - Structure ng request mula sa frontend
+type CreateAdminInput struct {
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
+	Email     string `json:"email"`
+	Role      string `json:"role"` // Halimbawa: "Assistant Librarian"
 }
 
-type RejectInput struct {
-	UserID uint   `json:"user_id"`
-	Reason string `json:"reason"`
-}
+// CreateAdminAccountService - Logic para sa paggawa ng admin at pag-send ng email
+func CreateAdminAccountService(input CreateAdminInput) error {
+	// 1. GENERATE RANDOM PASSWORD (Hex Format)
+	// Ang 4 bytes ay laging magbibigay ng 8 characters sa hex format.
+	// Hinding-hindi ito mag-cacause ng "out of range" error (no slicing).
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return errors.New("failed to generate secure random password")
+	}
+	tempPassword := fmt.Sprintf("%x", b) // Halimbawa: "e4f1a2b3"
 
-type UpdateUserStatusInput struct {
-	SchoolID string `json:"school_id"`
-	Status   string `json:"status"`
-}
-
-func GetPendingUsersService() ([]model.User, error) {
-	return repositories.GetPendingUsers()
-}
-
-func ApproveUserService(input ApproveInput) error {
-	user, err := repositories.FindUserByID(input.UserID)
+	// 2. HASH THE PASSWORD (Para sa database)
+	hashedPassword, err := utils.HashPassword(tempPassword)
 	if err != nil {
-		return errors.New("user not found")
+		return errors.New("failed to encrypt admin credentials")
 	}
 
-	if user.Role != status.RoleStudent {
-		return errors.New("only student accounts can be approved")
+	// 3. PREPARE ADMIN MODEL
+	// SchoolID format: ADM-1710928374 (Timestamp based)
+	adminID := fmt.Sprintf("ADM-%d", time.Now().Unix())
+
+	newAdmin := model.User{
+		FirstName: input.FirstName,
+		LastName:  input.LastName,
+		Email:     input.Email,
+		Password:  hashedPassword,
+		Role:      "admin",                 // System access level
+		Status:    status.UserStatusActive, // Auto-active ang admin accounts
+		SchoolID:  adminID,
+		Program:   input.Role, // Nilalagay ang position/role sa program field
 	}
 
-	if user.Status != status.UserStatusPending {
-		return errors.New("user is not pending approval")
+	// 4. SAVE TO DATABASE
+	// Siguraduhin na ang repositories.CreateUser ay gumagana nang tama
+	if err := repositories.CreateUser(&newAdmin); err != nil {
+		return errors.New("failed to save admin account to the database")
 	}
 
-	if err := repositories.ApproveUser(user.ID); err != nil {
-		return errors.New("failed to approve user")
-	}
+	// 5. SEND WELCOME EMAIL (Background Process)
+	// Ginagamitan natin ng 'go routine' para hindi mag-antay ang React frontend.
+	// Mag-su-success agad ang UI, habang sinesend ang email sa likod.
+	fmt.Printf("🚀 Admin Created: %s | Temp Pass: %s\n", input.Email, tempPassword)
 
-	record := &model.RegistrationRequest{
-		UserID:        user.ID,
-		FirstName:     user.FirstName,
-		LastName:      user.LastName,
-		Email:         user.Email,
-		SchoolID:      user.SchoolID,
-		SchoolIDImage: user.SchoolIDImage,
-		Program:       user.Program,
-		Year:          user.Year,
-		Action:        "Approved",
-		Reason:        "",
-		ActionedAt:    time.Now(),
-	}
-
-	if err := repositories.SaveRegistrationRequest(record); err != nil {
-		return errors.New("failed to save history")
-	}
-
-	if err := utils.DeleteSchoolIDImage(user.SchoolIDImage); err != nil {
-		return errors.New("user approved but failed to delete school ID image")
-	}
-
-	// clear dead URL from users table
-	repositories.ClearSchoolIDImage(user.ID)
-
-	if err := utils.SendApprovalEmail(user.Email, user.FirstName); err != nil {
-		return errors.New("user approved but failed to send email")
-	}
+	go func(email, name, pass string) {
+		errEmail := utils.SendAdminWelcomeEmail(email, name, pass)
+		if errEmail != nil {
+			fmt.Printf("❌ Email Error for %s: %v\n", email, errEmail)
+		} else {
+			fmt.Printf("✅ Welcome email sent successfully to %s\n", email)
+		}
+	}(input.Email, input.FirstName, tempPassword)
 
 	return nil
-}
-
-func RejectUserService(input RejectInput) error {
-	if input.Reason == "" {
-		return errors.New("rejection reason is required")
-	}
-
-	user, err := repositories.FindUserByID(input.UserID)
-	if err != nil {
-		return errors.New("user not found")
-	}
-
-	if user.Role != status.RoleStudent {
-		return errors.New("only student accounts can be rejected")
-	}
-
-	if user.Status != status.UserStatusPending {
-		return errors.New("user is not pending approval")
-	}
-
-	record := &model.RegistrationRequest{
-		UserID:        user.ID,
-		FirstName:     user.FirstName,
-		LastName:      user.LastName,
-		Email:         user.Email,
-		SchoolID:      user.SchoolID,
-		SchoolIDImage: user.SchoolIDImage,
-		Program:       user.Program,
-		Year:          user.Year,
-		Action:        "Rejected",
-		Reason:        input.Reason,
-		ActionedAt:    time.Now(),
-	}
-
-	if err := repositories.SaveRegistrationRequest(record); err != nil {
-		return errors.New("failed to save history")
-	}
-
-	if err := utils.DeleteSchoolIDImage(user.SchoolIDImage); err != nil {
-		return errors.New("user rejected but failed to delete school ID image")
-	}
-
-	if err := utils.SendRejectionEmail(user.Email, user.FirstName, input.Reason); err != nil {
-		return errors.New("user rejected but failed to send email")
-	}
-
-	// no need to ClearSchoolIDImage here since user gets deleted anyway
-	if err := repositories.DeleteUser(user.ID); err != nil {
-		return errors.New("failed to delete user")
-	}
-
-	return nil
-}
-
-func GetRegistrationHistoryService() ([]model.RegistrationRequest, error) {
-	return repositories.GetRegistrationHistory()
-}
-
-func GetAllUsersService() ([]model.User, error) {
-	var users []model.User
-	result := database.DB.Find(&users)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return users, nil
-}
-
-func UpdateUserStatusService(input UpdateUserStatusInput) error {
-	result := database.DB.Model(&model.User{}).
-		Where("school_id = ?", input.SchoolID).
-		Updates(map[string]interface{}{
-			"status":        input.Status,
-			"penalty_count": 0,
-		})
-
-	if result.Error != nil {
-		return errors.New("failed to update user status")
-	}
-
-	if result.RowsAffected == 0 {
-		return errors.New("user not found")
-	}
-
-	return nil
-}
-
-func DeleteUserService(schoolID string) error {
-	result := database.DB.Where("school_id = ?", schoolID).Delete(&model.User{})
-
-	if result.Error != nil {
-		return errors.New("failed to delete user")
-	}
-
-	if result.RowsAffected == 0 {
-		return errors.New("user not found")
-	}
-
-	return nil
-}
-
-func GetAllRequestsService() ([]model.Transaction, error) {
-	var transactions []model.Transaction
-	result := database.DB.Find(&transactions)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return transactions, nil
 }

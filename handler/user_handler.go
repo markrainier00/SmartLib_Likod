@@ -8,9 +8,6 @@ import (
 	"SmartLib_Likod/model/status"
 	"SmartLib_Likod/repositories"
 	"SmartLib_Likod/services"
-	"SmartLib_Likod/utils"
-	"fmt"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -34,7 +31,6 @@ func ApproveUser(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "Invalid request"})
 	}
 
-	// I-update sa database (Status: Active, RejectReason: blanko)
 	err := repositories.UpdateUserStatus(body.SchoolID, "Active", "")
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"isSuccess": false, "message": "Failed to approve user"})
@@ -53,17 +49,12 @@ func RejectUser(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "Invalid request"})
 	}
 
-	// I-update sa database (Status: Rejected, RejectReason: body.Reason)
 	err := repositories.UpdateUserStatus(body.SchoolID, "Rejected", body.Reason)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"isSuccess": false, "message": "Failed to reject user"})
 	}
 	return c.JSON(fiber.Map{"isSuccess": true, "message": "User rejected successfully"})
 }
-
-// ==========================================
-// 🚀 MANAGE ACCOUNTS (LOCK/UNLOCK & DELETE)
-// ==========================================
 
 // ChangeAccountStatus - Handles Lock and Unlock actions
 func ChangeAccountStatus(c *fiber.Ctx) error {
@@ -85,7 +76,7 @@ func ChangeAccountStatus(c *fiber.Ctx) error {
 
 // DeleteAccount - Permanently deletes a user from the system
 func DeleteAccount(c *fiber.Ctx) error {
-	schoolID := c.Params("id") // Halimbawa: /api/users/2024-0001
+	schoolID := c.Params("id")
 
 	err := repositories.DeleteUserBySchoolID(schoolID)
 	if err != nil {
@@ -94,20 +85,15 @@ func DeleteAccount(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"isSuccess": true, "message": "Account deleted successfully"})
 }
 
-// ==========================================
-// 🚀 SUPER ADMIN: GET ALL ACCOUNTS
-// ==========================================
+// GetAllAccounts - Super Admin: Kukunin lahat ng users
 func GetAllAccounts(c *fiber.Ctx) error {
 	var users []model.User
-
-	// Kukunin natin lahat ng users sa database para sa Accounts Page
 	if err := database.DB.Find(&users).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"isSuccess": false,
 			"message":   "Failed to fetch accounts",
 		})
 	}
-
 	return c.JSON(fiber.Map{
 		"isSuccess": true,
 		"data":      users,
@@ -115,58 +101,35 @@ func GetAllAccounts(c *fiber.Ctx) error {
 }
 
 // ==========================================
-// 🚀 SUPER ADMIN: CREATE ADMIN ACCOUNT
+// 🚀 SUPER ADMIN: CREATE ADMIN ACCOUNT (UPDATED)
 // ==========================================
-type CreateAdminInput struct {
-	FirstName string `json:"firstname"`
-	LastName  string `json:"lastname"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	Role      string `json:"role"` // Library Admin, Assistant Admin, etc. (Display purpose)
-}
 
 func CreateAdminAccount(c *fiber.Ctx) error {
-	var input CreateAdminInput
+	// Ginagamit natin ang Input struct mula sa services para consistent
+	var input services.CreateAdminInput
 
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "Invalid input"})
 	}
 
-	// 1. I-check kung may kaparehong email na
+	// 1. Validation: I-check kung existing na ang email
 	var existing model.User
 	if err := database.DB.Where("email = ?", input.Email).First(&existing).Error; err == nil {
 		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "Email is already registered"})
 	}
 
-	// 2. I-Hash ang password para secure!
-	hashedPassword, err := utils.HashPassword(input.Password)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"isSuccess": false, "message": "Failed to encrypt password"})
-	}
-
-	// 🚀 3. Gumawa ng Unique Admin ID! (Hal. ADMIN-1710928374)
-	uniqueAdminID := fmt.Sprintf("ADMIN-%d", time.Now().Unix())
-
-	// 4. I-save sa Supabase bilang ADMIN at ACTIVE agad
-	newAdmin := model.User{
-		FirstName: input.FirstName,
-		LastName:  input.LastName,
-		Email:     input.Email,
-		Password:  hashedPassword,
-		SchoolID:  uniqueAdminID, // 👈 Hindi na "N/A"
-		Program:   input.Role,
-		Year:      "N/A",
-		Status:    "Active",
-		Role:      "admin",
-	}
-
-	if err := database.DB.Create(&newAdmin).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"isSuccess": false, "message": "Failed to create admin account"})
+	// 2. Tawagin ang Service
+	// Ang service na ang bahala sa: Random Password -> Hashing -> DB Save -> Send Email
+	if err := services.CreateAdminAccountService(input); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   err.Error(),
+		})
 	}
 
 	return c.JSON(fiber.Map{
 		"isSuccess": true,
-		"message":   "Admin account successfully created!",
+		"message":   "Admin account created. Temporary password sent to email!",
 	})
 }
 

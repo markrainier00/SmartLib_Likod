@@ -70,8 +70,9 @@ func (h *NotificationHub) StartHub() {
 // 	clientChan := make(chan Notification)
 // 	NotifHub.Register <- clientChan
 
-// 	// Kapag umalis na sa page yung user, i-disconnect natin
-// 	c.Context().SetConnectionClose(true)
+	// Kapag umalis na sa page yung user, i-disconnect natin
+	// Na-apply na ang fix dito: inalis ang 'true'
+	c.Context().SetConnectionClose()
 
 // 	// Dito mangyayari ang walang-katapusang pagpapadala ng data (Streaming)
 // 	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
