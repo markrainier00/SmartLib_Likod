@@ -12,7 +12,7 @@ import (
 	"SmartLib_Likod/middleware"
 	"SmartLib_Likod/model"
 	"SmartLib_Likod/routes"
-	"SmartLib_Likod/services"
+	//"SmartLib_Likod/services"
 )
 
 func main() {
@@ -40,7 +40,7 @@ func main() {
 	// ==========================================
 
 	// 1. Tumatakbo ito para mag-check ng Overdue at mag-Auto Lock
-	services.StartDailyPenaltyChecker()
+	//services.StartDailyPenaltyChecker()
 
 	// 2. 🚀 BAGONG DAGDAG: Tumatakbo para sa Live Notifications (Registration/Penalty)
 	go handler.NotifHub.StartHub()
