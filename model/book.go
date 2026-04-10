@@ -15,7 +15,7 @@ type Book struct {
 	Category        string    `gorm:"type:varchar(500)" json:"category"`
 	Pages           string    `gorm:"default:1" json:"pages"`
 	Copies          string    `gorm:"default:1" json:"copies"`
-	Available       string    `gorm:"default:1" json:"available"`
+	Available       int       `gorm:"default:1" json:"available"`
 	Description     string    `gorm:"type:text" json:"description"`
 	ActualImage     string    `gorm:"type:text" json:"actual_image"`
 	CreatedAt       time.Time `json:"created_at"`
