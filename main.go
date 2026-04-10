@@ -8,7 +8,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"SmartLib_Likod/database"
-	"SmartLib_Likod/handler" // 🚀 BAGONG DAGDAG: Import para sa handler (Notifications)
+	"SmartLib_Likod/handler"
 	"SmartLib_Likod/middleware"
 	"SmartLib_Likod/model"
 	"SmartLib_Likod/routes"
@@ -52,9 +52,6 @@ func main() {
 	middleware.SetupCORS(app)
 
 	routes.Setup(app)
-
-	// 🚀 BAGONG DAGDAG: Ang SSE Endpoint para sa React Frontend
-	app.Get("/api/notifications", handler.SSEHandler)
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"message": "SmartLib API is running"})

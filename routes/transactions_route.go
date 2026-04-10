@@ -8,8 +8,9 @@ import (
 
 func SetupTransactionRoutes(api fiber.Router) {
 	transactions := api.Group("/transactions")
+	transactions.Get("/getRequests/:school_id", handler.GetUserBorrowRequestHandler)
 	transactions.Post("/request", handler.RequestBook)
-	transactions.Get("/getWishlist/:school_id", handler.GetWishlistHandler)
+	transactions.Get("/getWishlist/:school_id", handler.GetUserWishlistHandler)
 	transactions.Post("/addWishlist", handler.AddWishlistHandler)
 	transactions.Post("/removeWishlist", handler.RemoveWishlistHandler)
 	transactions.Put("/rejectRequest/:id", handler.RejectRequestHandler)

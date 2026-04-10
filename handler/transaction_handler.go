@@ -15,6 +15,25 @@ import (
 	"gorm.io/gorm"
 )
 
+func GetUserBorrowRequestHandler(c *fiber.Ctx) error {
+	schoolID := c.Params("school_id")
+
+	var transaction []model.Transaction
+	if err := database.DB.Where("school_id = ?", schoolID).
+		Order("created_at desc").
+		Find(&transaction).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Failed to fetch book borrow requests.",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"data":      transaction,
+	})
+}
+
 func RequestBook(c *fiber.Ctx) error {
 	var input services.RequestInput
 
@@ -120,7 +139,7 @@ func RemoveWishlistHandler(c *fiber.Ctx) error {
 	})
 }
 
-func GetWishlistHandler(c *fiber.Ctx) error {
+func GetUserWishlistHandler(c *fiber.Ctx) error {
 	schoolID := c.Params("school_id")
 
 	var wishlist []model.Wishlist
