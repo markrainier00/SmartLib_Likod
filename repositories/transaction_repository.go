@@ -31,9 +31,16 @@ func HasActiveRequest(schoolID string, isbn string) (int64, error) {
 	return count, err
 }
 
-// GetTransactionHistory - Para sa "Borrow History" ng student
-func GetTransactionHistory(schoolID string) ([]model.Transaction, error) {
+func GetStudentTransaction(schoolID string) ([]model.Transaction, error) {
 	var history []model.Transaction
+
+	err := database.DB.Where("school_id = ? AND status != ?", schoolID, "Pending").Order("id desc").Find(&history).Error
+	return history, err
+}
+
+func GetStudentHistory(schoolID string) ([]model.TransactionHistory, error) {
+	var history []model.TransactionHistory
+
 	err := database.DB.Where("school_id = ?", schoolID).Order("id desc").Find(&history).Error
 	return history, err
 }

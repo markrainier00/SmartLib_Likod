@@ -111,6 +111,22 @@ func GetAllUsers(c *fiber.Ctx) error {
 	})
 }
 
+func GetStudentUsers(c *fiber.Ctx) error {
+	users, err := services.GetStudentUsersService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
+	})
+}
 func UpdateUserStatus(c *fiber.Ctx) error {
 	var input services.UpdateUserStatusInput
 

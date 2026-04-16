@@ -23,3 +23,13 @@ type Transaction struct {
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `json:"deleted_at"`
 }
+
+type TransactionHistory struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	TransactionID uint      `json:"transaction_id"`
+	SchoolID      string    `json:"school_id"`
+	ISBN          string    `json:"isbn"`
+	Event         string    `json:"event"`
+	Staff         string    `json:"staff"`
+	Date          time.Time `json:"date"`
+}

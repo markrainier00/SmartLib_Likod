@@ -26,12 +26,12 @@ func main() {
 		&model.User{},
 		&model.PasswordReset{},
 		&model.Transaction{},
-		&model.Penalty{},
 		&model.OTPCode{},
 		&model.School{},
 		&model.Book{},
 		&model.Concern{},
 		&model.Wishlist{},
+		&model.TransactionHistory{},
 	)
 	if err != nil {
 		log.Fatal("Migration Failed: ", err)
