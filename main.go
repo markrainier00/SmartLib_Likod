@@ -32,6 +32,7 @@ func main() {
 		&model.Concern{},
 		&model.Wishlist{},
 		&model.TransactionHistory{},
+		&model.InformationChangeRequest{},
 	)
 	if err != nil {
 		log.Fatal("Migration Failed: ", err)

@@ -364,3 +364,37 @@ func ChangePassword(c *fiber.Ctx) error {
 		Data:    nil,
 	})
 }
+
+func ChangeInformationHandler(c *fiber.Ctx) error {
+	var input services.ChangeInformationInput
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   status.RetCode404,
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	if input.School_ID == "" || input.Email == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   status.RetCode401,
+			IsSuccess: false,
+			Error:     nil,
+		})
+	}
+
+	if err := services.ChangeInformationService(input); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   err.Error(),
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Information change request submitted. Wait for the admnistrator to approve the request.",
+		Data:    nil,
+	})
+}

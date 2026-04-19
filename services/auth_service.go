@@ -61,6 +61,14 @@ type ChangePasswordInput struct {
 	NewPassword     string `json:"new_password"`
 }
 
+type ChangeInformationInput struct {
+	School_ID  string `json:"school_id"`
+	Email      string `json:"email"`
+	Department string `json:"department"`
+	Program    string `json:"program"`
+	Year       string `json:"year"`
+}
+
 func SendOTPService(input SendOTPInput) error {
 	user, err := repositories.FindUserByEmail(input.Email)
 	if err == nil && user != nil {
@@ -249,4 +257,28 @@ func ChangePasswordService(userID uint, input ChangePasswordInput) error {
 	}
 
 	return nil
+}
+
+func ChangeInformationService(input ChangeInformationInput) error {
+	var count int64
+
+	database.DB.
+		Model(&model.InformationChangeRequest{}).
+		Where("school_id = ? AND status = ?", input.School_ID, "Pending").
+		Count(&count)
+
+	if count > 0 {
+		return errors.New("You already have a pending request.")
+	}
+
+	request := model.InformationChangeRequest{
+		SchoolID:   input.School_ID,
+		Email:      input.Email,
+		Department: input.Department,
+		Program:    input.Program,
+		Year:       input.Year,
+		Status:     "Pending",
+	}
+
+	return database.DB.Create(&request).Error
 }

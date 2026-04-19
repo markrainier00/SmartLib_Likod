@@ -26,3 +26,16 @@ type User struct {
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
 }
+
+type InformationChangeRequest struct {
+	ID           uint   `gorm:"primaryKey"`
+	SchoolID     string `json:"school_id"`
+	Email        string `json:"email"`
+	Department   string `json:"department"`
+	Program      string `json:"program"`
+	Year         string `json:"year"`
+	Status       string `json:"status"`
+	RejectReason string `json:"reject_reason"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}

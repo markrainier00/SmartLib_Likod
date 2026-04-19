@@ -38,6 +38,13 @@ func GetStudentTransaction(schoolID string) ([]model.Transaction, error) {
 	return history, err
 }
 
+func GetStudentAllTransaction(schoolID string) ([]model.Transaction, error) {
+	var history []model.Transaction
+
+	err := database.DB.Where("school_id = ?", schoolID).Order("id desc").Find(&history).Error
+	return history, err
+}
+
 func GetStudentHistory(schoolID string) ([]model.TransactionHistory, error) {
 	var history []model.TransactionHistory
 

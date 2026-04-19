@@ -186,3 +186,43 @@ func DeleteUser(c *fiber.Ctx) error {
 		Data:    nil,
 	})
 }
+
+func RejectInformationRequestHandler(c *fiber.Ctx) error {
+	var input struct {
+		ID           uint   `json:"id"`
+		RejectReason string `json:"reject_reason"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid input",
+		})
+	}
+
+	if input.ID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "ID is required",
+		})
+	}
+
+	if input.RejectReason == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Reject reason is required",
+		})
+	}
+
+	if err := services.RejectInformationRequest(input.ID, input.RejectReason); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"message":   "Request rejected successfully",
+	})
+}

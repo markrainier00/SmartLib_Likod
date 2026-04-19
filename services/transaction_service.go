@@ -49,7 +49,7 @@ type BorrowInput struct {
 	ReturnDate string `json:"return_date"`
 }
 
-type WishlistInput struct {
+type Wishlist struct {
 	SchoolID string `json:"school_id"`
 	ISBN     string `json:"isbn"`
 }
@@ -63,6 +63,7 @@ type StudentTransactionOutput struct {
 	DateReturned string `json:"date_returned"`
 	RejectReason string `json:"reject_reason"`
 	Violation    string `json:"violation"`
+	CreatedAt    string `json:"created_at"`
 }
 
 type StudentHistoryOutput struct {
@@ -278,7 +279,7 @@ func ProcessBookBorrowService(input ProcessBookBorrowInput) error {
 	})
 }
 
-func AddWishlistService(input WishlistInput) error {
+func AddWishlistService(input Wishlist) error {
 	w := &model.Wishlist{
 		SchoolID: input.SchoolID,
 		ISBN:     input.ISBN,
@@ -286,8 +287,28 @@ func AddWishlistService(input WishlistInput) error {
 	return repositories.AddWishlist(w)
 }
 
-func RemoveWishlistService(input WishlistInput) error {
+func RemoveWishlistService(input Wishlist) error {
 	return repositories.RemoveWishlist(input.SchoolID, input.ISBN)
+}
+
+func GetUserWishlistService(schoolID string) ([]Wishlist, error) {
+	var wishlist []model.Wishlist
+
+	if err := database.DB.
+		Where("school_id = ?", schoolID).
+		Find(&wishlist).Error; err != nil {
+		return nil, err
+	}
+
+	var result []Wishlist
+	for _, w := range wishlist {
+		result = append(result, Wishlist{
+			SchoolID: w.SchoolID,
+			ISBN:     w.ISBN,
+		})
+	}
+
+	return result, nil
 }
 
 // func BorrowBookService(input BorrowInput) error {
@@ -331,6 +352,30 @@ func GetStudentTransactionService(schoolID string) ([]StudentTransactionOutput, 
 			DateReturned: record.DateReturned.Format("2006-01-02"),
 			RejectReason: record.RejectReason,
 			Violation:    record.Violation,
+		}
+	}
+
+	return transaction, nil
+}
+
+func GetStudentAllTransactionService(schoolID string) ([]StudentTransactionOutput, error) {
+	transactionRecords, err := repositories.GetStudentAllTransaction(schoolID)
+	if err != nil {
+		return nil, err
+	}
+
+	transaction := make([]StudentTransactionOutput, len(transactionRecords))
+	for i, record := range transactionRecords {
+		transaction[i] = StudentTransactionOutput{
+			ID:           record.ID,
+			ISBN:         record.ISBN,
+			Status:       record.Status,
+			BorrowDate:   record.BorrowDate.Format("2006-01-02"),
+			ReturnDate:   record.ReturnDate.Format("2006-01-02"),
+			DateReturned: record.DateReturned.Format("2006-01-02"),
+			RejectReason: record.RejectReason,
+			Violation:    record.Violation,
+			CreatedAt:    record.CreatedAt.Format("2006-01-02"),
 		}
 	}
 

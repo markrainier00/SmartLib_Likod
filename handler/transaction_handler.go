@@ -76,7 +76,7 @@ func RequestBook(c *fiber.Ctx) error {
 }
 
 func AddWishlistHandler(c *fiber.Ctx) error {
-	var input services.WishlistInput
+	var input services.Wishlist
 
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(400).JSON(errormodel.ErrorModel{
@@ -101,7 +101,7 @@ func AddWishlistHandler(c *fiber.Ctx) error {
 }
 
 func RemoveWishlistHandler(c *fiber.Ctx) error {
-	var input services.WishlistInput
+	var input services.Wishlist
 
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(400).JSON(errormodel.ErrorModel{
@@ -128,22 +128,17 @@ func RemoveWishlistHandler(c *fiber.Ctx) error {
 func GetUserWishlistHandler(c *fiber.Ctx) error {
 	schoolID := c.Params("school_id")
 
-	var wishlist []model.Wishlist
-	if err := database.DB.Where("school_id = ?", schoolID).Find(&wishlist).Error; err != nil {
+	data, err := services.GetUserWishlistService(schoolID)
+	if err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"isSuccess": false,
 			"message":   "Failed to fetch wishlist",
 		})
 	}
 
-	bookIDs := make([]string, len(wishlist))
-	for i, w := range wishlist {
-		bookIDs[i] = w.ISBN
-	}
-
 	return c.JSON(fiber.Map{
 		"isSuccess": true,
-		"data":      bookIDs,
+		"data":      data,
 	})
 }
 
@@ -413,6 +408,33 @@ func GetStudentTransaction(c *fiber.Ctx) error {
 	}
 
 	history, err := services.GetStudentTransactionService(schoolID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch student history",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Student history fetched successfully",
+		Data:    history,
+	})
+}
+
+func GetStudentAllTransaction(c *fiber.Ctx) error {
+	schoolID := c.Params("school_id")
+
+	if schoolID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   status.RetCode404,
+			IsSuccess: false,
+			Error:     nil,
+		})
+	}
+
+	history, err := services.GetStudentAllTransactionService(schoolID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
 			Message:   "Failed to fetch student history",
