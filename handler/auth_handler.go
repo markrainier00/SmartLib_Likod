@@ -205,6 +205,13 @@ func RegisterHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	// ==========================================
+	// 🔔 TRIGGER: Notif kay Admin na may bagong register
+	// ==========================================
+	adminMsg := fmt.Sprintf("🙋‍♂️ New Account Pending: Student %s just registered. Please review and approve.", input.SchoolID)
+	services.BroadcastToRole("Admin", adminMsg)
+	services.BroadcastToRole("Staff", adminMsg)
+
 	// 5. Send response
 	return c.Status(fiber.StatusCreated).JSON(response.ResponseModel{
 		RetCode: "201",

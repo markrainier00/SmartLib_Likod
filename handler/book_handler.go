@@ -108,6 +108,17 @@ func AddBookHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	// ==========================================
+	// 📢 TRIGGER: BROADCAST SA LAHAT NG STUDENTS
+	// ==========================================
+	// Kapag successful ang pag-add ng libro, magpapadala tayo ng notification sa lahat!
+	broadcastMsg := fmt.Sprintf("New Arrival: Ang librong '%s' by %s ay available na ngayon sa library!", input.Title, input.Author)
+
+	// Tinawag natin yung BroadcastToRole function na ginawa natin kanina
+	// Papasok ito sa database ng lahat ng "Student" at tutunog nang live sa browser nila
+	services.BroadcastToRole("Student", broadcastMsg)
+	// ==========================================
+
 	return c.Status(fiber.StatusCreated).JSON(response.ResponseModel{
 		RetCode: "200",
 		Data:    book,
@@ -232,87 +243,3 @@ func DeleteBook(c *fiber.Ctx) error {
 		"message":   "Book successfully deleted!",
 	})
 }
-
-// func GetAllBook(c *fiber.Ctx) error {
-// 	var books []services.BookOutput
-
-// 	if err := services.GetAllBooksService(&books).Error; err != nil {
-// 		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
-// 			Message: "Failed to fetch books",
-// 			IsSuccess: false,
-// 			Error:   err,
-// 		})
-// 	}
-
-// 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
-// 		RetCode: "200",
-// 		Message: "Books fetched successfully",
-// 		Data:    books,
-// 	})
-// }
-// func AddBook(c *fiber.Ctx) error {
-// 	var input services.AddBookInput
-
-// 	if err := c.BodyParser(&input); err != nil {
-// 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
-// 			Message:   status.RetCode404,
-// 			IsSuccess: false,
-// 			Error:     err,
-// 		})
-// 	}
-
-// 	// Validate required fields
-// 	if input.Title == "" || input.Author == "" || input.ISBN == "" {
-// 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
-// 			Message:   status.RetCode401,
-// 			IsSuccess: false,
-// 			Error:     nil,
-// 		})
-// 	}
-
-// 	book, err := services.AddBookService(input)
-// 	if err != nil {
-// 		fmt.Println("🚨 DATABASE SAVE ERROR:", err)
-// 		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
-// 			Message:   err.Error(),
-// 			IsSuccess: false,
-// 			Error:     err,
-// 		})
-// 	}
-
-// 	fmt.Println("✅ SUCCESS! BOOK ADDED. ID:", book.ID)
-
-// 	return c.Status(fiber.StatusCreated).JSON(response.ResponseModel{
-// 		RetCode: "201",
-// 		Message: "Book added successfully",
-// 		Data:    book,
-// 	})
-// }
-
-// func DeleteBook(c *fiber.Ctx) error {
-// 	id := c.Params("id")
-// 	if id == "" {
-// 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
-// 			Message:   status.RetCode401,
-// 			IsSuccess: false,
-// 			Error:     nil,
-// 		})
-// 	}
-
-// 	if err := services.DeleteBookService(id); err != nil {
-// 		fmt.Println("🚨 DATABASE DELETE ERROR:", err)
-// 		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
-// 			Message:   err.Error(),
-// 			IsSuccess: false,
-// 			Error:     err,
-// 		})
-// 	}
-
-// 	fmt.Println("✅ SUCCESS! BOOK DELETED. ID:", id)
-
-// 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
-// 		RetCode: "200",
-// 		Message: "Book successfully deleted",
-// 		Data:    nil,
-// 	})
-// }

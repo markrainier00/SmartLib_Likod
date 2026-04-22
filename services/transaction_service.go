@@ -81,6 +81,29 @@ type WholeHistoryOutput struct {
 	Date     time.Time `json:"date"`
 }
 
+// 🔔 Helper Function: Save to DB & Send SSE
+func saveAndSendNotification(schoolID string, message string) {
+	newNotif := &model.Notification{
+		SchoolID: schoolID,
+		Message:  message,
+		IsRead:   false,
+	}
+
+	// Save to DB
+	repositories.CreateNotification(newNotif)
+
+	// Payload for SSE
+	payload := NotificationPayload{
+		ID:   int64(newNotif.ID),
+		Msg:  message,
+		Time: time.Now().Format("Jan 02, 3:04 PM"),
+		Read: false,
+	}
+
+	// Send to active client (direkta nang tinatawag ang NotifHub dito)
+	NotifHub.SendNotification(schoolID, payload)
+}
+
 func RequestBookService(input RequestInput) error {
 	pickupDate, err := time.Parse("2006-01-02", input.PickupDate)
 	if err != nil {
@@ -307,7 +330,16 @@ func AddWishlistService(input Wishlist) error {
 		SchoolID: input.SchoolID,
 		ISBN:     input.ISBN,
 	}
-	return repositories.AddWishlist(w)
+
+	err := repositories.AddWishlist(w)
+	if err != nil {
+		return err
+	}
+
+	msg := "Book added to your wishlist!"
+	saveAndSendNotification(input.SchoolID, msg)
+
+	return nil
 }
 
 func RemoveWishlistService(input Wishlist) error {
@@ -333,26 +365,6 @@ func GetUserWishlistService(schoolID string) ([]Wishlist, error) {
 
 	return result, nil
 }
-
-// func BorrowBookService(input BorrowInput) error {
-// 	count, err := repositories.HasActiveBorrow(input.SchoolID)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	if count >= 3 {
-// 		return errors.New("you already have an active borrowed book")
-// 	}
-
-// 	tx := &model.Transaction{
-// 		SchoolID:   input.SchoolID,
-// 		ISBN:       input.ISBN,
-// 		Status:     "Pending",
-// 		BorrowDate: input.BorrowDate,
-// 	}
-
-// 	return repositories.CreateTransaction(tx)
-// }
 
 func GetStudentTransactionService(schoolID string) ([]StudentTransactionOutput, error) {
 	transactionRecords, err := repositories.GetStudentTransaction(schoolID)

@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"fmt"
+
 	"SmartLib_Likod/database"
 	"SmartLib_Likod/model"
+	"SmartLib_Likod/services"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -42,6 +45,14 @@ func UpdateConcern(c *fiber.Ctx) error {
 	}
 
 	database.DB.Save(&concern)
+
+	// ==========================================
+	// 🔔 TRIGGER: Notif sa Student kapag sumagot si Admin
+	// Pinalitan natin ang concern.SchoolID ng concern.Student
+	// ==========================================
+	msg := "💬 An Admin has replied to or updated your submitted concern. Check your support page."
+	sendStudentNotification(concern.Student, msg)
+
 	return c.JSON(fiber.Map{"isSuccess": true, "message": "Concern updated successfully"})
 }
 
@@ -60,6 +71,14 @@ func CreateConcern(c *fiber.Ctx) error {
 	if err := database.DB.Create(&concern).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"isSuccess": false, "message": "Failed to save concern"})
 	}
+
+	// ==========================================
+	// 🔔 TRIGGER: Notif kay Admin na may bagong ticket/concern
+	// Pinalitan natin ang concern.SchoolID ng concern.Student
+	// ==========================================
+	adminMsg := fmt.Sprintf("📩 New Concern: Student %s submitted an inquiry. Please check the dashboard.", concern.Student)
+	services.BroadcastToRole("Admin", adminMsg)
+	services.BroadcastToRole("Staff", adminMsg)
 
 	return c.JSON(fiber.Map{"isSuccess": true, "message": "Concern submitted successfully!"})
 }

@@ -1,104 +1,138 @@
 package handler
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
-	"sync"
+	"log"
+	"time"
+
+	"SmartLib_Likod/database"
+	"SmartLib_Likod/model"
+	"SmartLib_Likod/repositories"
+	"SmartLib_Likod/services"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/valyala/fasthttp"
 )
 
-// 1. 📦 ANG ITSURA NG NOTIFICATION NATIN
-type Notification struct {
-	Type    string      `json:"type"`
-	Message string      `json:"message"`
-	Role    string      `json:"role"`
-	Data    interface{} `json:"data"`
-}
-
-// 2. 📡 ANG BROADCASTING HUB
-type NotificationHub struct {
-	Clients    map[chan Notification]bool
-	Broadcast  chan Notification
-	Register   chan chan Notification
-	Unregister chan chan Notification
-	mu         sync.Mutex
-}
-
-var NotifHub = &NotificationHub{
-	Clients:    make(map[chan Notification]bool),
-	Broadcast:  make(chan Notification),
-	Register:   make(chan chan Notification),
-	Unregister: make(chan chan Notification),
-}
-
-// StartHub - Pinapatakbo ito sa background
-func (h *NotificationHub) StartHub() {
-	for {
-		select {
-		case client := <-h.Register:
-			h.mu.Lock()
-			h.Clients[client] = true
-			h.mu.Unlock()
-			fmt.Println("🟢 SSE Client Connected. Total:", len(h.Clients))
-
-		case client := <-h.Unregister:
-			h.mu.Lock()
-			if _, ok := h.Clients[client]; ok {
-				delete(h.Clients, client)
-				close(client)
-				fmt.Println("🔴 SSE Client Disconnected. Total:", len(h.Clients))
-			}
-			h.mu.Unlock()
-
-		case notif := <-h.Broadcast:
-			h.mu.Lock()
-			for client := range h.Clients {
-				client <- notif
-			}
-			h.mu.Unlock()
-		}
+// ==========================================
+// 1. SSE STREAM HANDLER
+// ==========================================
+func SseHandler(c *fiber.Ctx) error {
+	schoolID := c.Params("school_id")
+	if schoolID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "School ID is required"})
 	}
+
+	c.Set("Content-Type", "text/event-stream")
+	c.Set("Cache-Control", "no-cache")
+	c.Set("Connection", "keep-alive")
+
+	client := &services.Client{
+		SchoolID: schoolID,
+		Message:  make(chan services.NotificationPayload),
+	}
+
+	services.NotifHub.Register <- client
+
+	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
+		defer func() {
+			services.NotifHub.Unregister <- client
+		}()
+
+		fmt.Fprintf(w, ": keep-alive\n\n")
+		w.Flush()
+
+		for {
+			select {
+			case msg, ok := <-client.Message:
+				if !ok {
+					return
+				}
+				dataBytes, err := json.Marshal(msg)
+				if err != nil {
+					continue
+				}
+
+				fmt.Fprintf(w, "data: %s\n\n", string(dataBytes))
+				if err := w.Flush(); err != nil {
+					log.Printf("Client %s connection lost", schoolID)
+					return
+				}
+
+			case <-time.After(15 * time.Second):
+				fmt.Fprintf(w, ": ping\n\n")
+				if err := w.Flush(); err != nil {
+					return
+				}
+			}
+		}
+	}))
+
+	return nil
 }
 
-// 3. 🚀 ANG ENDPOINT NA TATAWAGIN NG REACT (SSE)
-// func SSEHandler(c *fiber.Ctx) error {
-// 	// I-setup ang headers para alam ng browser na live streaming ito
-// 	c.Set("Content-Type", "text/event-stream")
-// 	c.Set("Cache-Control", "no-cache")
-// 	c.Set("Connection", "keep-alive")
-// 	c.Set("Transfer-Encoding", "chunked")
+// ==========================================
+// 2. GET NOTIFICATION HISTORY
+// ==========================================
+func GetNotificationHistory(c *fiber.Ctx) error {
+	schoolID := c.Params("school_id")
 
-// 	// Gumawa ng channel para sa bagong user na kumonekta
-// 	clientChan := make(chan Notification)
-// 	NotifHub.Register <- clientChan
+	dbNotifs, err := repositories.GetNotificationsBySchoolID(schoolID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch notifications"})
+	}
 
-	// Kapag umalis na sa page yung user, i-disconnect natin
-	// Na-apply na ang fix dito: inalis ang 'true'
-	c.Context().SetConnectionClose()
+	var formattedNotifs []services.NotificationPayload
+	for _, n := range dbNotifs {
+		formattedNotifs = append(formattedNotifs, services.NotificationPayload{
+			ID:   int64(n.ID),
+			Msg:  n.Message,
+			Time: n.CreatedAt.Format("Jan 02, 3:04 PM"),
+			Read: n.IsRead,
+		})
+	}
 
-// 	// Dito mangyayari ang walang-katapusang pagpapadala ng data (Streaming)
-// 	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
-// 		// Siguraduhing ma-unregister pag nag-close ang browser
-// 		defer func() {
-// 			NotifHub.Unregister <- clientChan
-// 		}()
+	return c.JSON(fiber.Map{"isSuccess": true, "data": formattedNotifs})
+}
 
-// 		for {
-// 			select {
-// 			case notif := <-clientChan:
-// 				// I-convert ang struct sa JSON para mabasa ng React
-// 				data, _ := json.Marshal(notif)
+// ==========================================
+// 🧹 3. CLEAR ALL NOTIFICATIONS HANDLER
+// ==========================================
+func ClearNotificationsHandler(c *fiber.Ctx) error {
+	schoolID := c.Params("school_id")
+	if schoolID == "" {
+		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "School ID is required"})
+	}
 
-// 				// Format ng SSE: "data: {json_string}\n\n"
-// 				fmt.Fprintf(w, "data: %s\n\n", string(data))
+	// 🚀 UPDATE: Tuluyan nang buburahin sa Database para hindi na bumalik pag-relogin
+	if err := database.DB.Where("school_id = ?", schoolID).Delete(&model.Notification{}).Error; err != nil {
+		fmt.Println("❌ Error clearing notifications:", err)
+		return c.Status(500).JSON(fiber.Map{"isSuccess": false, "message": "Failed to clear notifications"})
+	}
 
-// 				// I-push palabas papunta sa React
-// 				err := w.Flush()
-// 				if err != nil {
-// 					// Kapag nag-error (e.g. pinatay yung wifi), tigil na ang loop
-// 					return
-// 				}
-// 			}
-// 		}
-// 	})
+	return c.JSON(fiber.Map{"isSuccess": true, "message": "All notifications permanently cleared"})
+}
 
-// 	return nil
-// }
+// ==========================================
+// ✅ 4. MARK SINGLE NOTIFICATION AS READ
+// ==========================================
+func MarkNotificationAsReadHandler(c *fiber.Ctx) error {
+	notifID := c.Params("id")
+
+	// 🚀 Ise-set ang is_read = true sa database para mawala ang red highlight
+	if err := database.DB.Model(&model.Notification{}).
+		Where("id = ?", notifID).
+		Update("is_read", true).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Failed to mark notification as read",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"message":   "Notification marked as read",
+	})
+}

@@ -8,6 +8,8 @@ import (
 
 func SetupTransactionRoutes(api fiber.Router) {
 	transactions := api.Group("/transactions")
+
+	// Endpoints para sa Transactions
 	transactions.Get("/getRequests/:school_id", handler.GetUserBorrowRequestHandler)
 	transactions.Post("/request", handler.RequestBook)
 	transactions.Get("/getWishlist/:school_id", handler.GetUserWishlistHandler)
@@ -15,6 +17,10 @@ func SetupTransactionRoutes(api fiber.Router) {
 	transactions.Post("/removeWishlist", handler.RemoveWishlistHandler)
 	transactions.Put("/approveBorrowRequest", handler.ApproveBorrowRequestHandler)
 	transactions.Put("/rejectBorrowRequest", handler.RejectBorrowRequestHandler)
+
+	// Ito yung hinahanap ng React mo kanina
+	transactions.Get("/pending-all", handler.GetBookBorrowRequestHandler)
+
 	transactions.Get("/getBookBorrowRequest", handler.GetBookBorrowRequestHandler)
 	transactions.Get("/getActiveBorrow", handler.GetActiveBorrowHandler)
 	transactions.Get("/getApprovedRequests", handler.GetApprovedRequestsHandler)

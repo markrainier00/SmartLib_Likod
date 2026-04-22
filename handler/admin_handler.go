@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"SmartLib_Likod/database"
+	"SmartLib_Likod/model"
 	errormodel "SmartLib_Likod/model/error"
 	"SmartLib_Likod/model/response"
 	"SmartLib_Likod/model/status"
@@ -8,6 +10,10 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 )
+
+// ==========================================
+// USER APPROVAL & MANAGEMENT
+// ==========================================
 
 func ApproveUserHandler(c *fiber.Ctx) error {
 	var input services.ApproveInput
@@ -34,6 +40,14 @@ func ApproveUserHandler(c *fiber.Ctx) error {
 			IsSuccess: false,
 			Error:     err,
 		})
+	}
+
+	// ==========================================
+	// 🔔 TRIGGER: Notif sa Student kapag APPROVED
+	// ==========================================
+	var user model.User
+	if err := database.DB.First(&user, input.UserID).Error; err == nil {
+		sendStudentNotification(user.SchoolID, "✅ Your account registration has been APPROVED! You can now access all library features.")
 	}
 
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
@@ -68,6 +82,14 @@ func RejectUserHandler(c *fiber.Ctx) error {
 			IsSuccess: false,
 			Error:     err,
 		})
+	}
+
+	// ==========================================
+	// 🔔 TRIGGER: Notif sa Student kapag REJECTED
+	// ==========================================
+	var user model.User
+	if err := database.DB.First(&user, input.UserID).Error; err == nil {
+		sendStudentNotification(user.SchoolID, "❌ Your account registration was REJECTED. Please contact the library staff for more information.")
 	}
 
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
@@ -154,6 +176,12 @@ func UpdateUserStatus(c *fiber.Ctx) error {
 		})
 	}
 
+	// ==========================================
+	// 🔔 TRIGGER: Notif sa Student kapag na-update ang status (Hal: Banned, Suspended, Active)
+	// ==========================================
+	statusMsg := "🔔 Your library account status has been updated to: " + input.Status
+	sendStudentNotification(input.SchoolID, statusMsg)
+
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "User status updated successfully",
@@ -224,5 +252,35 @@ func RejectInformationRequestHandler(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"isSuccess": true,
 		"message":   "Request rejected successfully",
+	})
+}
+
+// ==========================================
+// ADMIN ACCOUNT MANAGEMENT (NEW)
+// ==========================================
+
+func CreateAdminAccountHandler(c *fiber.Ctx) error {
+	var input services.CreateAdminInput
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   "Invalid input format",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	if err := services.CreateAdminAccountService(input); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   err.Error(),
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Admin account successfully created. A welcome email has been sent.",
+		Data:    nil,
 	})
 }
