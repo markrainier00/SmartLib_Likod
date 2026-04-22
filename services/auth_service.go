@@ -30,7 +30,7 @@ type CheckSchoolIDInput struct {
 	SchoolID string `json:"school_id"`
 }
 
-type RegisterInput struct {
+type RegisterUserInput struct {
 	FirstName     string `json:"firstname"`
 	LastName      string `json:"lastname"`
 	Email         string `json:"email"`
@@ -40,6 +40,12 @@ type RegisterInput struct {
 	Year          string `json:"year"`
 	Password      string `json:"password"`
 	SchoolIDImage string `json:"school_id_image"`
+}
+
+type RegisterStaffInput struct {
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
+	Email     string `json:"email"`
 }
 
 type SigninInput struct {
@@ -67,6 +73,11 @@ type ChangeInformationInput struct {
 	Department string `json:"department"`
 	Program    string `json:"program"`
 	Year       string `json:"year"`
+}
+
+type ApproveRejectInput struct {
+	SchoolID string `json:"school_id"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 func SendOTPService(input SendOTPInput) error {
@@ -132,7 +143,7 @@ func GetSchoolsService() ([]model.School, error) {
 	return schools, nil
 }
 
-func RegisterUser(input RegisterInput) (*model.User, error) {
+func RegisterUser(input RegisterUserInput) (*model.User, error) {
 
 	hashedPassword, err := utils.HashPassword(input.Password)
 	if err != nil {
@@ -158,6 +169,45 @@ func RegisterUser(input RegisterInput) (*model.User, error) {
 	}
 
 	return user, nil
+}
+
+func RegisterStaffService(input RegisterStaffInput) error {
+	user, err := repositories.FindUserByEmail(input.Email)
+	if err == nil && user != nil {
+		return errors.New("Email already registered")
+	}
+
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return errors.New("Failed to generate secure random password")
+	}
+	tempPassword := fmt.Sprintf("%x", b)
+
+	hashedPassword, err := utils.HashPassword(tempPassword)
+	if err != nil {
+		return errors.New("Failed to encrypt admin credentials")
+	}
+
+	adminID := fmt.Sprintf("ADM-%d", time.Now().Unix())
+
+	staff := model.User{
+		FirstName: input.FirstName,
+		LastName:  input.LastName,
+		Email:     input.Email,
+		Password:  hashedPassword,
+		Role:      "Staff",
+		Status:    status.UserStatusActive,
+		SchoolID:  adminID,
+	}
+
+	if err := repositories.CreateUser(&staff); err != nil {
+		return errors.New("Failed to create staff")
+	}
+
+	if err := utils.SendAdminWelcomeEmail(staff.Email, staff.FirstName, tempPassword); err != nil {
+		return errors.New("Failed to send welcome email")
+	}
+	return nil
 }
 
 func SigninUser(input SigninInput) (*model.User, error) {
@@ -281,4 +331,66 @@ func ChangeInformationService(input ChangeInformationInput) error {
 	}
 
 	return database.DB.Create(&request).Error
+}
+
+func UpdateUserStatusService(input UpdateUserStatusInput) error {
+	allowed := map[string]bool{
+		"Active":   true,
+		"Locked":   true,
+		"Pending":  true,
+		"Archived": true,
+	}
+	if !allowed[input.Status] {
+		return errors.New("invalid status value")
+	}
+
+	var user model.User
+	if err := database.DB.Where("school_id = ?", input.SchoolID).First(&user).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	user.Status = input.Status
+
+	if err := database.DB.Save(&user).Error; err != nil {
+		return errors.New("failed to update user status")
+	}
+
+	return nil
+}
+
+func ApproveUserService(schoolID string) error {
+	var user model.User
+
+	if err := database.DB.Where("school_id = ?", schoolID).First(&user).Error; err != nil {
+		return errors.New("User not found")
+	}
+
+	user.Status = "Active"
+
+	if err := database.DB.Save(&user).Error; err != nil {
+		return errors.New("Failed to approve user")
+	}
+
+	if err := utils.SendStudentWelcomeEmail(user.Email, user.FirstName); err != nil {
+		return errors.New("Failed to send approval email")
+	}
+
+	return nil
+}
+
+func RejectUserService(input ApproveRejectInput) error {
+	var user model.User
+
+	if err := database.DB.Where("school_id = ?", input.SchoolID).First(&user).Error; err != nil {
+		return errors.New("User not found")
+	}
+
+	if err := utils.SendRegisterRejectionEmail(user.FirstName, user.Email, input.Reason); err != nil {
+		return errors.New("Failed to send rejection email")
+	}
+
+	if err := database.DB.Unscoped().Delete(&user).Error; err != nil {
+		return errors.New("Failed to delete user record")
+	}
+	return nil
 }

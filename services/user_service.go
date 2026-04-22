@@ -6,51 +6,39 @@ import (
 	"SmartLib_Likod/repositories"
 )
 
-type ApproveInput struct {
-	UserID uint `json:"user_id"`
-}
-
-type RejectInput struct {
-	UserID uint   `json:"user_id"`
-	Reason string `json:"reason"`
-}
-
 type UpdateUserStatusInput struct {
 	SchoolID string `json:"school_id"`
 	Status   string `json:"status"`
 }
 
-// DAPAT NANDITO ANG MGA FUNCTIONS NA ITO
-func ApproveUserService(input ApproveInput) error {
-	// ... yung logic na sinend mo kanina ...
-	return nil
-}
-
-func RejectUserService(input RejectInput) error {
-	// ... yung logic na sinend mo kanina ...
-	return nil
-}
-
-func GetAllUsersService() ([]model.User, error) {
+func GetWholeUsersService() ([]model.User, error) {
 	var users []model.User
 	result := database.DB.Find(&users)
 	return users, result.Error
 }
 
-func GetStudentUsersService() ([]model.User, error) {
+func GetAllUsersService() ([]model.User, error) {
 	var users []model.User
-	result := database.DB.Where("role = ?", "Student").Find(&users)
+	result := database.DB.Where("status != ?", "Archived").Find(&users)
 	return users, result.Error
 }
 
-func UpdateUserStatusService(input UpdateUserStatusInput) error {
-	// ... logic ...
-	return nil
+func GetPendingUsersService() ([]model.User, error) {
+	var users []model.User
+	result := database.DB.Where("status = ?", "Pending").Find(&users)
+	return users, result.Error
 }
 
-func DeleteUserService(schoolID string) error {
-	// ... logic ...
-	return nil
+func GetStudentUsersService() ([]model.User, error) {
+	var users []model.User
+	result := database.DB.Where("role = ? AND status != ? AND status != ?", "Student", "Pending", "Archived").Find(&users)
+	return users, result.Error
+}
+
+func GetSpecificUserService(schoolID string) ([]model.User, error) {
+	var users []model.User
+	result := database.DB.Where("school_id = ?", schoolID).Find(&users)
+	return users, result.Error
 }
 
 func GetAllRequestsService() ([]model.Transaction, error) {

@@ -9,8 +9,16 @@ import (
 
 func SetupAdminRoutes(api fiber.Router) {
 	admin := api.Group("/admin", middleware.AuthMiddleware)
-	admin.Get("/registrations", handler.GetAllUsers)
+	admin.Get("/wholeUsers", handler.GetWholeUsers)
+	admin.Get("/allUsers", handler.GetAllUsers)
+	admin.Get("/pendingUsers", handler.GetPendingUsers)
 	admin.Get("/studentUsers", handler.GetStudentUsers)
+	admin.Get("/specificUser/:school_id", handler.GetSpecificUser)
 	admin.Put("/status", handler.UpdateUserStatus)
-	admin.Delete("/:school_id", handler.DeleteUser)
+
+	admin.Put("/approve", handler.ApproveUser)
+	admin.Put("/reject", handler.RejectUser)
+
+	admin.Get("/all", handler.GetAllAccounts)
+	admin.Post("/addStaff", handler.RegisterStaffHandler)
 }

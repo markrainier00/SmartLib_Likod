@@ -73,7 +73,7 @@ func MarkTokenUsed(token string) error {
 }
 
 // ==========================================
-// 🚀 ADMIN REGISTRATION APPROVALS
+// 🚀 BAGONG DAGDAG: ADMIN REGISTRATION APPROVALS
 // ==========================================
 
 // GetAllRegistrations - Kinukuha lahat ng nag-register

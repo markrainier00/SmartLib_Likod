@@ -13,7 +13,7 @@ func SetupAuthRoutes(api fiber.Router) {
 	auth.Post("/verify-otp", handler.VerifyOTP)
 	auth.Post("/check-school-id", handler.CheckSchoolID)
 	auth.Get("/schools", handler.GetSchools)
-	auth.Post("/register", handler.RegisterHandler)
+	auth.Post("/register", handler.RegisterUserHandler)
 	auth.Post("/signin", handler.Signin)
 	auth.Post("/forgot-password", handler.ForgotPassword)
 	auth.Post("/reset-password", handler.ResetPassword)

@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"SmartLib_Likod/database"
-	"SmartLib_Likod/model"
 	errormodel "SmartLib_Likod/model/error"
 	"SmartLib_Likod/model/response"
 	"SmartLib_Likod/model/status"
@@ -11,12 +9,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// ==========================================
-// USER APPROVAL & MANAGEMENT
-// ==========================================
-
-func ApproveUserHandler(c *fiber.Ctx) error {
-	var input services.ApproveInput
+func RegisterStaffHandler(c *fiber.Ctx) error {
+	var input services.RegisterStaffInput
 
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
@@ -26,7 +20,7 @@ func ApproveUserHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	if input.UserID == 0 {
+	if input.FirstName == "" || input.LastName == "" || input.Email == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
 			Message:   status.RetCode401,
 			IsSuccess: false,
@@ -34,7 +28,7 @@ func ApproveUserHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := services.ApproveUserService(input); err != nil {
+	if err := services.RegisterStaffService(input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
 			Message:   err.Error(),
 			IsSuccess: false,
@@ -42,59 +36,9 @@ func ApproveUserHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	// ==========================================
-	// 🔔 TRIGGER: Notif sa Student kapag APPROVED
-	// ==========================================
-	var user model.User
-	if err := database.DB.First(&user, input.UserID).Error; err == nil {
-		sendStudentNotification(user.SchoolID, "✅ Your account registration has been APPROVED! You can now access all library features.")
-	}
-
-	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
-		RetCode: "200",
-		Message: "User approved successfully",
-		Data:    nil,
-	})
-}
-
-func RejectUserHandler(c *fiber.Ctx) error {
-	var input services.RejectInput
-
-	if err := c.BodyParser(&input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
-			Message:   status.RetCode404,
-			IsSuccess: false,
-			Error:     err,
-		})
-	}
-
-	if input.UserID == 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
-			Message:   status.RetCode401,
-			IsSuccess: false,
-			Error:     nil,
-		})
-	}
-
-	if err := services.RejectUserService(input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
-			Message:   err.Error(),
-			IsSuccess: false,
-			Error:     err,
-		})
-	}
-
-	// ==========================================
-	// 🔔 TRIGGER: Notif sa Student kapag REJECTED
-	// ==========================================
-	var user model.User
-	if err := database.DB.First(&user, input.UserID).Error; err == nil {
-		sendStudentNotification(user.SchoolID, "❌ Your account registration was REJECTED. Please contact the library staff for more information.")
-	}
-
-	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
-		RetCode: "200",
-		Message: "User rejected successfully",
+	return c.Status(fiber.StatusCreated).JSON(response.ResponseModel{
+		RetCode: "201",
+		Message: "Staff registration successful.",
 		Data:    nil,
 	})
 }
@@ -116,6 +60,23 @@ func GetRegistrationHistoryHandler(c *fiber.Ctx) error {
 	})
 }
 
+func GetWholeUsers(c *fiber.Ctx) error {
+	users, err := services.GetWholeUsersService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
+	})
+}
+
 func GetAllUsers(c *fiber.Ctx) error {
 	users, err := services.GetAllUsersService()
 	if err != nil {
@@ -130,6 +91,99 @@ func GetAllUsers(c *fiber.Ctx) error {
 		RetCode: "200",
 		Message: "Users fetched successfully",
 		Data:    users,
+	})
+}
+
+func GetPendingUsers(c *fiber.Ctx) error {
+	users, err := services.GetPendingUsersService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
+	})
+}
+
+func ApproveUser(c *fiber.Ctx) error {
+	var input services.ApproveRejectInput
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   "Invalid request body",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	if input.SchoolID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   "School ID is required",
+			IsSuccess: false,
+			Error:     nil,
+		})
+	}
+
+	if err := services.ApproveUserService(input.SchoolID); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   err.Error(),
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "User approved successfully",
+		Data:    nil,
+	})
+}
+
+func RejectUser(c *fiber.Ctx) error {
+	var input services.ApproveRejectInput
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   "Invalid request body",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	if input.SchoolID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   "School ID is required",
+			IsSuccess: false,
+			Error:     nil,
+		})
+	}
+
+	if input.Reason == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   "Rejection reason is required",
+			IsSuccess: false,
+			Error:     nil,
+		})
+	}
+
+	if err := services.RejectUserService(input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   err.Error(),
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "User rejected successfully",
+		Data:    nil,
 	})
 }
 
@@ -149,6 +203,26 @@ func GetStudentUsers(c *fiber.Ctx) error {
 		Data:    users,
 	})
 }
+
+func GetSpecificUser(c *fiber.Ctx) error {
+	schoolID := c.Params("school_id")
+
+	users, err := services.GetSpecificUserService(schoolID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
+	})
+}
+
 func UpdateUserStatus(c *fiber.Ctx) error {
 	var input services.UpdateUserStatusInput
 
@@ -176,41 +250,9 @@ func UpdateUserStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	// ==========================================
-	// 🔔 TRIGGER: Notif sa Student kapag na-update ang status (Hal: Banned, Suspended, Active)
-	// ==========================================
-	statusMsg := "🔔 Your library account status has been updated to: " + input.Status
-	sendStudentNotification(input.SchoolID, statusMsg)
-
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "User status updated successfully",
-		Data:    nil,
-	})
-}
-
-func DeleteUser(c *fiber.Ctx) error {
-	schoolID := c.Params("school_id")
-
-	if schoolID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
-			Message:   "School ID is required",
-			IsSuccess: false,
-			Error:     nil,
-		})
-	}
-
-	if err := services.DeleteUserService(schoolID); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
-			Message:   err.Error(),
-			IsSuccess: false,
-			Error:     err,
-		})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
-		RetCode: "200",
-		Message: "User deleted successfully",
 		Data:    nil,
 	})
 }
@@ -252,35 +294,5 @@ func RejectInformationRequestHandler(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"isSuccess": true,
 		"message":   "Request rejected successfully",
-	})
-}
-
-// ==========================================
-// ADMIN ACCOUNT MANAGEMENT (NEW)
-// ==========================================
-
-func CreateAdminAccountHandler(c *fiber.Ctx) error {
-	var input services.CreateAdminInput
-
-	if err := c.BodyParser(&input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
-			Message:   "Invalid input format",
-			IsSuccess: false,
-			Error:     err,
-		})
-	}
-
-	if err := services.CreateAdminAccountService(input); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
-			Message:   err.Error(),
-			IsSuccess: false,
-			Error:     err,
-		})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
-		RetCode: "200",
-		Message: "Admin account successfully created. A welcome email has been sent.",
-		Data:    nil,
 	})
 }

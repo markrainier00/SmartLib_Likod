@@ -134,7 +134,7 @@ func GetSchools(c *fiber.Ctx) error {
 	})
 }
 
-func RegisterHandler(c *fiber.Ctx) error {
+func RegisterUserHandler(c *fiber.Ctx) error {
 	var savedPath string
 
 	// 1. Handle image upload to Supabase Storage
@@ -173,7 +173,7 @@ func RegisterHandler(c *fiber.Ctx) error {
 	}
 
 	// 2. Build input
-	input := services.RegisterInput{
+	input := services.RegisterUserInput{
 		FirstName:     c.FormValue("firstname"),
 		LastName:      c.FormValue("lastname"),
 		Email:         c.FormValue("email"),
