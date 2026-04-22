@@ -1,6 +1,10 @@
 package handler
 
 import (
+	"time"
+
+	"SmartLib_Likod/database"
+	"SmartLib_Likod/model"
 	errormodel "SmartLib_Likod/model/error"
 	"SmartLib_Likod/model/response"
 	"SmartLib_Likod/model/status"
@@ -137,6 +141,9 @@ func ApproveUser(c *fiber.Ctx) error {
 			Error:     err,
 		})
 	}
+
+	msg := "System Notice: Your SmartLib account registration has been approved. You may now access the portal."
+	sendStudentNotification(input.SchoolID, msg)
 
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
 		RetCode: "200",
@@ -294,5 +301,157 @@ func RejectInformationRequestHandler(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"isSuccess": true,
 		"message":   "Request rejected successfully",
+	})
+}
+
+type MonthlyData struct {
+	M   string `json:"m"`
+	Val int    `json:"val"`
+}
+
+type CategoryData struct {
+	Cat   string `json:"cat"`
+	Pct   int    `json:"pct"`
+	Color string `json:"color"`
+}
+
+type TopBookData struct {
+	Title   string `json:"title"`
+	Author  string `json:"author"`
+	Borrows int    `json:"borrows"`
+	Emoji   string `json:"emoji"`
+}
+
+func GetAnalyticsFullHandler(c *fiber.Ctx) error {
+	_ = c.Query("range", "This Year")
+
+	var totalBooks int64
+	var activeBorrows int64
+	var overdueBooks int64
+	var totalStudents int64
+
+	database.DB.Model(&model.Book{}).Count(&totalBooks)
+
+	database.DB.Model(&model.Transaction{}).Where("status = ?", "Borrowed").Count(&activeBorrows)
+
+	database.DB.Model(&model.Transaction{}).
+		Where("status = ? AND due_date < CURRENT_TIMESTAMP", "Borrowed").
+		Count(&overdueBooks)
+
+	database.DB.Model(&model.User{}).
+		Where("LOWER(role) = ? AND LOWER(status) = ?", "student", "active").
+		Count(&totalStudents)
+
+	allMonths := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+	monthValues := make(map[string]int)
+	for _, m := range allMonths {
+		monthValues[m] = 0
+	}
+
+	var dbResults []struct {
+		Month string
+		Total int
+	}
+
+	database.DB.Model(&model.Transaction{}).
+		Select("TO_CHAR(created_at, 'Mon') as month, count(*) as total").
+		Where("EXTRACT(YEAR FROM created_at) = ?", time.Now().Year()).
+		Group("month").
+		Scan(&dbResults)
+
+	for _, res := range dbResults {
+		monthValues[res.Month] = res.Total
+	}
+
+	var monthly []MonthlyData
+	for _, m := range allMonths {
+		monthly = append(monthly, MonthlyData{M: m, Val: monthValues[m]})
+	}
+
+	// ==========================================
+	// 🚀 ALL CATEGORIES FIX (Tinanggal na natin ang .Limit)
+	// ==========================================
+	var catCounts []struct {
+		Category string
+		Count    int
+	}
+
+	database.DB.Model(&model.Book{}).
+		Select("category, count(*) as count").
+		Group("category").
+		Order("count desc").
+		Scan(&catCounts)
+
+	var categories []CategoryData
+	colors := []string{"#3d8bef", "#7c3aed", "#4caf6e", "#f59e0b", "#ec4899", "#06b6d4", "#f97316"}
+
+	if len(catCounts) > 0 {
+		for i, c := range catCounts {
+			pct := 0
+			if totalBooks > 0 {
+				pct = int((float64(c.Count) / float64(totalBooks)) * 100)
+			}
+
+			// Paikot na kulay para hindi mag-error kahit madami
+			color := colors[i%len(colors)]
+
+			// 🚀 FIX: Palitan ang blank string ng "Uncategorized"
+			catName := c.Category
+			if catName == "" || catName == " " {
+				catName = "Uncategorized"
+			}
+
+			categories = append(categories, CategoryData{
+				Cat:   catName,
+				Pct:   pct,
+				Color: color,
+			})
+		}
+	} else {
+		categories = []CategoryData{
+			{Cat: "General", Pct: 0, Color: "#3d8bef"},
+		}
+	}
+
+	var topBorrows []struct {
+		ISBN  string
+		Count int
+	}
+
+	database.DB.Model(&model.Transaction{}).Select("isbn, count(*) as count").Group("isbn").Order("count desc").Limit(5).Scan(&topBorrows)
+
+	var top []TopBookData
+	for _, tb := range topBorrows {
+		var book model.Book
+		database.DB.Where("isbn = ?", tb.ISBN).First(&book)
+
+		title := book.Title
+		if title == "" {
+			title = "Unknown Book (ISBN: " + tb.ISBN + ")"
+		}
+
+		top = append(top, TopBookData{
+			Title:   title,
+			Author:  book.Author,
+			Borrows: tb.Count,
+			Emoji:   "📖",
+		})
+	}
+
+	if len(top) == 0 {
+		top = []TopBookData{}
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"data": fiber.Map{
+			"totalBooks":    totalBooks,
+			"activeBorrows": activeBorrows,
+			"overdueBooks":  overdueBooks,
+			"totalStudents": totalStudents,
+			"monthly":       monthly,
+			"categories":    categories,
+			"top":           top,
+		},
 	})
 }

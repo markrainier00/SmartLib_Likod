@@ -85,19 +85,6 @@ func RequestBook(c *fiber.Ctx) error {
 		})
 	}
 
-	// ==========================================
-	// 🔔 MGA TRIGGERS PARA SA NOTIFICATION
-	// ==========================================
-
-	// 1. Notif para sa Student (Papasok sa history nila)
-	msg := fmt.Sprintf("Your book request for ISBN %s has been submitted.", input.ISBN)
-	sendStudentNotification(input.SchoolID, msg)
-
-	// 2. Real-time Notif para sa ADMIN at STAFF (Ito ang magpapatunog ng bell ni Mark)
-	adminMsg := fmt.Sprintf("New Book Request: Student %s is requesting ISBN %s. Review now.", input.SchoolID, input.ISBN)
-	services.BroadcastToRole("Admin", adminMsg)
-	services.BroadcastToRole("Staff", adminMsg)
-
 	return c.Status(fiber.StatusCreated).JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "Book request saved successfully",
@@ -250,6 +237,13 @@ func ApproveBorrowRequestHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	// 🔔 NOTIF: APPROVED (Ready for Pick-up)
+	var tx model.Transaction
+	if err := database.DB.First(&tx, input.TransactionID).Error; err == nil {
+		msg := fmt.Sprintf("Request Approved: Your requested book (ISBN: %s) is ready. Please claim it at the library desk.", tx.ISBN)
+		sendStudentNotification(tx.SchoolID, msg)
+	}
+
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "Book borrow request approved",
@@ -282,6 +276,13 @@ func RejectBorrowRequestHandler(c *fiber.Ctx) error {
 			IsSuccess: false,
 			Error:     err,
 		})
+	}
+
+	// 🔔 NOTIF: REJECTED (Formal)
+	var tx model.Transaction
+	if err := database.DB.First(&tx, input.TransactionID).Error; err == nil {
+		msg := fmt.Sprintf("Request Declined: Your request for the book (ISBN: %s) could not be processed. Reason: %s.", tx.ISBN, input.RejectReason)
+		sendStudentNotification(tx.SchoolID, msg)
 	}
 
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
@@ -318,6 +319,13 @@ func ProcessBookBorrowHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	// 🔔 TRIGGER: NOTIF KAPAG KINUHA NA NI STUDENT (Official Borrow)
+	var tx model.Transaction
+	if err := database.DB.First(&tx, input.TransactionID).Error; err == nil {
+		msg := fmt.Sprintf("Transaction Processed: You have successfully borrowed the book (ISBN: %s). Please return it on or before the due date.", tx.ISBN)
+		sendStudentNotification(tx.SchoolID, msg)
+	}
+
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "Book borrow succeed.",
@@ -352,6 +360,7 @@ func GetStaffHistory(c *fiber.Ctx) error {
 		"data":      history,
 	})
 }
+
 func ReturnBookHandler(c *fiber.Ctx) error {
 	id := c.Params("id")
 
@@ -472,12 +481,11 @@ func ReturnBookHandler(c *fiber.Ctx) error {
 			"message":   "Transaction commit failed.",
 		})
 	}
-	tx.Commit()
 
-	// 🔔 TRIGGER: Notif para sa Student kapag naibalik na ang libro
-	msg := "Your book has been marked as RETURNED."
+	// 🔔 NOTIF: RETURNED (Formal)
+	msg := "Transaction Closed: Your borrowed book has been successfully returned."
 	if input.OverduePoint > 0 {
-		msg += " Note: Returned late."
+		msg = "Transaction Closed: Your borrowed book has been successfully returned. (Status: Returned Late)."
 	}
 	sendStudentNotification(transaction.SchoolID, msg)
 
@@ -486,6 +494,7 @@ func ReturnBookHandler(c *fiber.Ctx) error {
 		Message: "Book marked as returned.",
 	})
 }
+
 func GetStudentTransaction(c *fiber.Ctx) error {
 	schoolID := c.Params("school_id")
 
@@ -590,12 +599,12 @@ func GetWholeHistory(c *fiber.Ctx) error {
 
 func sendStudentNotification(schoolID string, message string) {
 	// 1. I-save sa database
-	notif := &model.Notification{
+	notif := model.Notification{
 		SchoolID: schoolID,
 		Message:  message,
 		IsRead:   false,
 	}
-	database.DB.Create(notif)
+	database.DB.Create(&notif)
 
 	// 2. I-send nang live sa React frontend
 	payload := services.NotificationPayload{

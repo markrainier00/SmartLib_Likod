@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -51,8 +53,43 @@ func main() {
 	// Patakbuhin ang Hub sa background (goroutine)
 	go services.NotifHub.StartHub()
 
-	// Patakbuhin ang Automatic Due Date Checker
-	go services.StartCronJobs()
+	// 🚀 DUE DATE CHECKER (Tumatakbo sa background)
+	go func() {
+		// Magche-check ito araw-araw (Every 24 hours)
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			// Kukunin ang petsa bukas
+			tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+
+			var soonDueTransactions []model.Transaction
+			// Hanapin lahat ng "Borrowed" na ang ReturnDate ay tugma bukas
+			database.DB.Where("status = ? AND DATE(return_date) = ?", "Borrowed", tomorrow).Find(&soonDueTransactions)
+
+			for _, tx := range soonDueTransactions {
+				msg := fmt.Sprintf("Reminder: Your borrowed book (ISBN: %s) is due TOMORROW. Please return it on time to avoid penalties.", tx.ISBN)
+
+				// 1. I-save ang notification sa database
+				notif := model.Notification{
+					SchoolID: tx.SchoolID,
+					Message:  msg,
+					IsRead:   false,
+				}
+				database.DB.Create(&notif)
+
+				// 2. I-send din nang live kung naka-online ang student!
+				payload := services.NotificationPayload{
+					ID:   int64(notif.ID),
+					Msg:  msg,
+					Time: time.Now().Format("Jan 02, 3:04 PM"),
+					Read: false,
+				}
+				services.NotifHub.SendNotification(tx.SchoolID, payload)
+			}
+			<-ticker.C // Maghihintay ng 24 hours bago umikot ulit
+		}
+	}()
 
 	// ==========================================
 
