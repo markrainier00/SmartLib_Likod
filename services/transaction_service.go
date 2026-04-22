@@ -73,10 +73,22 @@ type StudentHistoryOutput struct {
 	Date  time.Time `json:"date"`
 }
 
+type WholeHistoryOutput struct {
+	ID       uint      `json:"transaction_id"`
+	SchoolID string    `json:"school_id"`
+	ISBN     string    `json:"isbn"`
+	Event    string    `json:"event"`
+	Date     time.Time `json:"date"`
+}
+
 func RequestBookService(input RequestInput) error {
 	pickupDate, err := time.Parse("2006-01-02", input.PickupDate)
 	if err != nil {
 		return err
+	}
+
+	if pickupDate.Before(time.Now().Truncate(24 * time.Hour)) {
+		return fmt.Errorf("The selected pickup date is invalid. It must not be earlier than today.")
 	}
 
 	request := &model.Transaction{
@@ -227,6 +239,17 @@ func ProcessBookBorrowService(input ProcessBookBorrowInput) error {
 	var book model.Book
 	var user model.User
 
+	if input.ReturnDate.Before(time.Now().Truncate(24 * time.Hour)) {
+		return fmt.Errorf("The selected return date is invalid. It must not be earlier than today.")
+	}
+
+	today := time.Now().Truncate(24 * time.Hour)
+	maxDate := today.AddDate(0, 0, 7)
+
+	if input.ReturnDate.After(maxDate) {
+		return fmt.Errorf("The selected return date is invalid. It must not be more than 7 days from today.")
+	}
+
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 
 		if err := tx.Where("school_id = ?", input.SchoolID).First(&user).Error; err != nil {
@@ -331,10 +354,6 @@ func GetUserWishlistService(schoolID string) ([]Wishlist, error) {
 // 	return repositories.CreateTransaction(tx)
 // }
 
-func ReleaseBookService(schoolID string) error {
-	return repositories.ReleaseBookStatus(schoolID)
-}
-
 func GetStudentTransactionService(schoolID string) ([]StudentTransactionOutput, error) {
 	transactionRecords, err := repositories.GetStudentTransaction(schoolID)
 	if err != nil {
@@ -395,6 +414,26 @@ func GetStudentHistoryService(schoolID string) ([]StudentHistoryOutput, error) {
 			ISBN:  record.ISBN,
 			Event: record.Event,
 			Date:  record.Date,
+		}
+	}
+
+	return history, nil
+}
+
+func GetWholeHistoryService() ([]WholeHistoryOutput, error) {
+	historyRecords, err := repositories.GetWholeHistory()
+	if err != nil {
+		return nil, err
+	}
+
+	history := make([]WholeHistoryOutput, len(historyRecords))
+	for i, record := range historyRecords {
+		history[i] = WholeHistoryOutput{
+			ID:       record.TransactionID,
+			SchoolID: record.SchoolID,
+			ISBN:     record.ISBN,
+			Event:    record.Event,
+			Date:     record.Date,
 		}
 	}
 

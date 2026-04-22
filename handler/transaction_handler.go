@@ -18,7 +18,7 @@ func GetUserBorrowRequestHandler(c *fiber.Ctx) error {
 	schoolID := c.Params("school_id")
 
 	var transaction []model.Transaction
-	if err := database.DB.Where("school_id = ?", schoolID).
+	if err := database.DB.Where("school_id = ? AND status = ?", schoolID, "Pending").
 		Order("created_at desc").
 		Find(&transaction).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{
@@ -44,7 +44,7 @@ func RequestBook(c *fiber.Ctx) error {
 		})
 	}
 
-	count, err := repositories.HasActiveRequest(input.SchoolID, input.ISBN)
+	request, err := repositories.HasActiveRequest(input.SchoolID, input.ISBN)
 	if err != nil {
 		return c.Status(500).JSON(errormodel.ErrorModel{
 			Message:   "Database error",
@@ -53,9 +53,25 @@ func RequestBook(c *fiber.Ctx) error {
 		})
 	}
 
-	if count > 0 {
+	if request > 0 {
 		return c.Status(400).JSON(errormodel.ErrorModel{
 			Message:   "You already have an active request for this book",
+			IsSuccess: false,
+		})
+	}
+
+	borrow, err := repositories.HasActiveBorrow(input.SchoolID, input.ISBN)
+	if err != nil {
+		return c.Status(500).JSON(errormodel.ErrorModel{
+			Message:   "Database error",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	if borrow > 0 {
+		return c.Status(400).JSON(errormodel.ErrorModel{
+			Message:   "You already have an active borrow for this book",
 			IsSuccess: false,
 		})
 	}
@@ -322,7 +338,6 @@ func GetStaffHistory(c *fiber.Ctx) error {
 		"data":      history,
 	})
 }
-
 func ReturnBookHandler(c *fiber.Ctx) error {
 	id := c.Params("id")
 
@@ -346,6 +361,7 @@ func ReturnBookHandler(c *fiber.Ctx) error {
 		Violation      string `json:"violation"`
 		ViolationCount int    `json:"violation_count"`
 		OverduePoint   int    `json:"overdue_point"`
+		Staff          string `json:"staff"`
 	}
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(400).JSON(fiber.Map{
@@ -361,41 +377,93 @@ func ReturnBookHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	now := time.Now()
+
 	user.ViolationCount += input.ViolationCount
 	if input.ViolationCount > 0 {
 		user.OffenseCount += 1
+
+		base := now
+		if user.EndLockDate.After(now) {
+			base = user.EndLockDate
+		}
+		user.EndLockDate = base.AddDate(0, 0, input.ViolationCount)
 	}
+
 	transaction.Violation = input.Violation
 	if input.OverduePoint < 1 {
 		transaction.Status = "Returned"
 	} else {
 		transaction.Status = "Returned Late"
 	}
-	transaction.DateReturned = time.Now()
+	transaction.DateReturned = now
 
 	tx := database.DB.Begin()
+
 	if err := tx.Save(&user).Error; err != nil {
 		tx.Rollback()
 		return c.Status(500).JSON(fiber.Map{
 			"isSuccess": false,
-			"message":   "Failed to process book borrow request rejection.",
+			"message":   "Failed to update user.",
 		})
 	}
+
 	if err := tx.Save(&transaction).Error; err != nil {
 		tx.Rollback()
 		return c.Status(500).JSON(fiber.Map{
 			"isSuccess": false,
-			"message":   "Failed to process book borrow request rejection.",
+			"message":   "Failed to update transaction.",
 		})
 	}
-	tx.Commit()
+
+	var book model.Book
+	if err := tx.Where("isbn = ?", transaction.ISBN).First(&book).Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Book not found.",
+		})
+	}
+
+	book.Available += 1
+
+	if err := tx.Save(&book).Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Failed to update book availability.",
+		})
+	}
+
+	history := model.TransactionHistory{
+		TransactionID: transaction.ID,
+		SchoolID:      transaction.SchoolID,
+		ISBN:          transaction.ISBN,
+		Event:         "Return",
+		Staff:         input.Staff,
+		Date:          time.Now(),
+	}
+
+	if err := tx.Create(&history).Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Failed to save transaction history.",
+		})
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Transaction commit failed.",
+		})
+	}
 
 	return c.Status(200).JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "Book marked as returned.",
 	})
 }
-
 func GetStudentTransaction(c *fiber.Ctx) error {
 	schoolID := c.Params("school_id")
 
@@ -462,6 +530,23 @@ func GetStudentHistory(c *fiber.Ctx) error {
 	}
 
 	history, err := services.GetStudentHistoryService(schoolID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch student history",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Student history fetched successfully",
+		Data:    history,
+	})
+}
+
+func GetWholeHistory(c *fiber.Ctx) error {
+	history, err := services.GetWholeHistoryService()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
 			Message:   "Failed to fetch student history",

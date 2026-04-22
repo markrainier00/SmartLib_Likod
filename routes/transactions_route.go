@@ -25,5 +25,6 @@ func SetupTransactionRoutes(api fiber.Router) {
 	transactions.Get("/allDetails/:school_id", handler.GetStudentAllTransaction)
 	transactions.Get("/history/:school_id", handler.GetStudentHistory)
 	transactions.Get("/getStaffHistory", handler.GetStaffHistory)
+	transactions.Get("/getWholeHistory", handler.GetWholeHistory)
 	transactions.Get("/all", handler.GetAllTransactions)
 }
