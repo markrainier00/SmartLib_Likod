@@ -17,8 +17,6 @@ func SetupTransactionRoutes(api fiber.Router) {
 	transactions.Post("/removeWishlist", handler.RemoveWishlistHandler)
 	transactions.Put("/approveBorrowRequest", handler.ApproveBorrowRequestHandler)
 	transactions.Put("/rejectBorrowRequest", handler.RejectBorrowRequestHandler)
-	transactions.Put("/rejectRequest/:id", handler.RejectRequestHandler)
-	transactions.Put("/approveRequest/:id/:isbn", handler.ApproveRequestHandler)
 
 	// Ito yung hinahanap ng React mo kanina
 	transactions.Get("/pending-all", handler.GetBookBorrowRequestHandler)

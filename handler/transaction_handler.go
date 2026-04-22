@@ -234,7 +234,7 @@ func ApproveBorrowRequestHandler(c *fiber.Ctx) error {
 		})
 	}
 
-		if input.TransactionID == 0 || input.ISBN == "" || input.Staff == "" {
+	if input.TransactionID == 0 || input.ISBN == "" || input.Staff == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
 			Message:   status.RetCode401,
 			IsSuccess: false,
@@ -248,29 +248,7 @@ func ApproveBorrowRequestHandler(c *fiber.Ctx) error {
 			IsSuccess: false,
 			Error:     err,
 		})
-	
-	book.Available -= 1
-	transaction.Status = "Approved"
-	transaction.ApproveDate = time.Now()
-
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(&transaction).Error; err != nil {
-			return err
-		}
-		if err := tx.Save(&book).Error; err != nil {
-			return err
-		}
-		return nil
-	}); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"isSuccess": false,
-			"message":   "Failed to approve book borrow request",
-		})
 	}
-
-	// 🔔 TRIGGER: Notif para sa Student kapag na-approve
-	msg := fmt.Sprintf("Your request to borrow book (ISBN: %s) has been APPROVED!", isbn)
-	sendStudentNotification(transaction.SchoolID, msg)
 
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
 		RetCode: "200",
@@ -339,10 +317,6 @@ func ProcessBookBorrowHandler(c *fiber.Ctx) error {
 			Error:     err,
 		})
 	}
-
-	// 🔔 TRIGGER: Notif para sa Student kapag na-reject
-	msg := fmt.Sprintf("Your book request was REJECTED. Reason: %s", transaction.RejectReason)
-	sendStudentNotification(transaction.SchoolID, msg)
 
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
 		RetCode: "200",
