@@ -50,3 +50,15 @@ func GetAllRequestsService() ([]model.Transaction, error) {
 func GetRegistrationHistoryService() ([]model.RegistrationRequest, error) {
 	return repositories.GetRegistrationHistory()
 }
+
+func GetAllAccountsService() ([]model.User, error) {
+	var users []model.User
+	result := database.DB.Find(&users)
+	return users, result.Error
+}
+
+func GetInformationChangeService() ([]model.InformationChangeRequest, error) {
+	var request []model.InformationChangeRequest
+	result := database.DB.Where("status = ?", "Pending").Find(&request)
+	return request, result.Error
+}

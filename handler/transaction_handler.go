@@ -105,6 +105,38 @@ func RequestBook(c *fiber.Ctx) error {
 	})
 }
 
+func CancelRequestHandler(c *fiber.Ctx) error {
+	var input struct {
+		ID uint `json:"id"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid input",
+		})
+	}
+
+	if input.ID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "ID is required",
+		})
+	}
+
+	if err := services.CancelRequestService(input.ID); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"message":   "Request cancelled successfully",
+	})
+}
+
 func AddWishlistHandler(c *fiber.Ctx) error {
 	var input services.Wishlist
 
@@ -152,6 +184,32 @@ func RemoveWishlistHandler(c *fiber.Ctx) error {
 	return c.JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "Removed from wishlist",
+	})
+}
+
+func ToggleWishlistNotifyHandler(c *fiber.Ctx) error {
+	var input struct {
+		SchoolID string `json:"school_id"`
+		ISBN     string `json:"isbn"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid input",
+		})
+	}
+
+	if err := services.ToggleWishlistNotify(input.SchoolID, input.ISBN); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"message":   "Wishlist notify toggled",
 	})
 }
 

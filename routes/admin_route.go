@@ -21,4 +21,8 @@ func SetupAdminRoutes(api fiber.Router) {
 
 	admin.Get("/all", handler.GetAllAccounts)
 	admin.Post("/addStaff", handler.RegisterStaffHandler)
+
+	admin.Get("/informationChange", handler.GetInformationChange)
+	admin.Put("/approveInformationChange", handler.ApproveInformationRequestHandler)
+	admin.Put("/rejectInformationChange", handler.RejectInformationRequestHandler)
 }

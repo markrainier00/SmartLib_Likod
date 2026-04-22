@@ -257,6 +257,38 @@ func UpdateUserStatus(c *fiber.Ctx) error {
 	})
 }
 
+func ApproveInformationRequestHandler(c *fiber.Ctx) error {
+	var input struct {
+		ID uint `json:"id"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid input",
+		})
+	}
+
+	if input.ID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "ID is required",
+		})
+	}
+
+	if err := services.ApproveInformationRequest(input.ID); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"message":   "Request approved successfully",
+	})
+}
+
 func RejectInformationRequestHandler(c *fiber.Ctx) error {
 	var input struct {
 		ID           uint   `json:"id"`
@@ -294,5 +326,39 @@ func RejectInformationRequestHandler(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"isSuccess": true,
 		"message":   "Request rejected successfully",
+	})
+}
+
+func GetAllAccounts(c *fiber.Ctx) error {
+	users, err := services.GetAllAccountsService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
+	})
+}
+
+func GetInformationChange(c *fiber.Ctx) error {
+	users, err := services.GetInformationChangeService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
 	})
 }

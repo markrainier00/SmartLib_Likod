@@ -12,16 +12,23 @@ func ApproveInformationRequest(id uint) error {
 		return err
 	}
 
-	err := database.DB.Model(&model.User{}).
-		Where("school_id = ?", req.SchoolID).
-		Updates(map[string]interface{}{
-			"email":      req.Email,
-			"department": req.Department,
-			"program":    req.Program,
-			"year":       req.Year,
-		}).Error
+	updates := map[string]interface{}{}
+	if req.Email != "" {
+		updates["email"] = req.Email
+	}
+	if req.Department != "" {
+		updates["department"] = req.Department
+	}
+	if req.Program != "" {
+		updates["program"] = req.Program
+	}
+	if req.Year != "" {
+		updates["year"] = req.Year
+	}
 
-	if err != nil {
+	if err := database.DB.Model(&model.User{}).
+		Where("school_id = ?", req.SchoolID).
+		Updates(updates).Error; err != nil {
 		return err
 	}
 

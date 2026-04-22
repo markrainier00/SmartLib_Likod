@@ -52,12 +52,15 @@ type BorrowInput struct {
 type Wishlist struct {
 	SchoolID string `json:"school_id"`
 	ISBN     string `json:"isbn"`
+	Title    string `json:"title"`
+	Status   string `json:"status"`
 }
 
 type StudentTransactionOutput struct {
 	ID           uint   `json:"id"`
 	ISBN         string `json:"isbn"`
 	Status       string `json:"status"`
+	PickupDate   string `json:"pickup_date"`
 	BorrowDate   string `json:"borrow_date"`
 	ReturnDate   string `json:"return_date"`
 	DateReturned string `json:"date_returned"`
@@ -142,6 +145,12 @@ func RequestBookService(input RequestInput) error {
 	}
 
 	return tx.Commit().Error
+}
+
+func CancelRequestService(id uint) error {
+	return database.DB.Model(&model.Transaction{}).
+		Where("id = ?", id).
+		Update("status", "Cancelled").Error
 }
 
 func ApproveBorrowRequestService(input ApproveBorrowRequestInput) error {
@@ -329,6 +338,7 @@ func AddWishlistService(input Wishlist) error {
 	w := &model.Wishlist{
 		SchoolID: input.SchoolID,
 		ISBN:     input.ISBN,
+		Status:   "Notify",
 	}
 
 	err := repositories.AddWishlist(w)
@@ -336,14 +346,29 @@ func AddWishlistService(input Wishlist) error {
 		return err
 	}
 
-	msg := "Book added to your wishlist!"
-	saveAndSendNotification(input.SchoolID, msg)
-
 	return nil
 }
 
 func RemoveWishlistService(input Wishlist) error {
 	return repositories.RemoveWishlist(input.SchoolID, input.ISBN)
+}
+
+func ToggleWishlistNotify(schoolID, isbn string) error {
+	var wish model.Wishlist
+
+	if err := database.DB.
+		Where("school_id = ? AND isbn = ?", schoolID, isbn).
+		First(&wish).Error; err != nil {
+		return err
+	}
+
+	newStatus := "Notify"
+	if wish.Status == "Notify" {
+		newStatus = "Wish"
+	}
+
+	return database.DB.Model(&wish).
+		Update("status", newStatus).Error
 }
 
 func GetUserWishlistService(schoolID string) ([]Wishlist, error) {
@@ -360,6 +385,7 @@ func GetUserWishlistService(schoolID string) ([]Wishlist, error) {
 		result = append(result, Wishlist{
 			SchoolID: w.SchoolID,
 			ISBN:     w.ISBN,
+			Status:   w.Status,
 		})
 	}
 
@@ -401,6 +427,7 @@ func GetStudentAllTransactionService(schoolID string) ([]StudentTransactionOutpu
 			ID:           record.ID,
 			ISBN:         record.ISBN,
 			Status:       record.Status,
+			PickupDate:   record.PickupDate.Format("2006-01-02"),
 			BorrowDate:   record.BorrowDate.Format("2006-01-02"),
 			ReturnDate:   record.ReturnDate.Format("2006-01-02"),
 			DateReturned: record.DateReturned.Format("2006-01-02"),

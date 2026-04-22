@@ -383,7 +383,7 @@ func ChangeInformationHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	if input.School_ID == "" || input.Email == "" {
+	if input.School_ID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
 			Message:   status.RetCode401,
 			IsSuccess: false,

@@ -6,13 +6,13 @@ import (
 
 type Book struct {
 	ID              uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	Title           string    `gorm:"type:varchar(255);not null" json:"title"`
-	Author          string    `gorm:"type:varchar(255);not null" json:"author"`
-	ISBN            string    `gorm:"type:varchar(20);unique" json:"isbn"`
-	Publisher       string    `gorm:"type:varchar(150)" json:"publisher"`
-	PublicationDate string    `gorm:"type:varchar(50)" json:"publication_date"`
-	Edition         string    `gorm:"type:varchar(50)" json:"edition"`
-	Category        string    `gorm:"type:varchar(500)" json:"category"`
+	Title           string    `gorm:"not null" json:"title"`
+	Author          string    `gorm:"not null" json:"author"`
+	ISBN            string    `gorm:"unique" json:"isbn"`
+	Publisher       string    `json:"publisher"`
+	PublicationDate string    `json:"publication_date"`
+	Edition         string    `json:"edition"`
+	Category        string    `json:"category"`
 	Pages           string    `gorm:"default:0" json:"pages"`
 	Copies          string    `gorm:"default:0" json:"copies"`
 	Available       int       `gorm:"default:0" json:"available"`
