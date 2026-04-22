@@ -13,6 +13,8 @@ func Setup(app *fiber.App) {
 	SetupTransactionRoutes(api)
 	SetupBooks(api)
 
+	api.Get("/admin/analytics-full", handler.GetAnalyticsFullHandler)
+
 	concerns := api.Group("/concerns")
 	concerns.Get("/", handler.GetConcerns)
 	concerns.Put("/:id", handler.UpdateConcern)
