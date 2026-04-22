@@ -39,12 +39,6 @@ func Setup(app *fiber.App) {
 	api.Get("/admin/analytics-full", handler.GetFullAnalytics)
 
 	// ==========================================
-	// 📷 SCANNER
-	// ==========================================
-	scanner := api.Group("/scanner")
-	scanner.Get("/:school_id", handler.GetStudentScannerData)
-
-	// ==========================================
 	// 💬 STUDENT CONCERNS
 	// Handler: concern_handler.go
 	// ==========================================
