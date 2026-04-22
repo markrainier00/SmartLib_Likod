@@ -19,9 +19,9 @@ type User struct {
 	Status         string         `json:"status" gorm:"default:Pending"`
 	Password       string         `json:"-" gorm:"not null"`
 	SchoolIDImage  string         `json:"school_id_image"`
-	RejectReason   string         `json:"reject_reason"`
 	ViolationCount int            `json:"violation_count"`
 	OffenseCount   int            `json:"offense_count"`
+	EndLockDate    time.Time      `json:"end_lock_date"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
