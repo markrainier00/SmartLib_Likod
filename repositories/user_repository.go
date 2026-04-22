@@ -17,7 +17,7 @@ func FindUserByEmail(email string) (*model.User, error) {
 	return &user, result.Error
 }
 
-// Looks if the email exists
+// Looks if the school id exists
 func FindUserBySchoolID(school_id string) (*model.User, error) {
 	var user model.User
 	result := database.DB.Where("school_id = ?", school_id).First(&user)
@@ -44,7 +44,7 @@ func FindOTPCode(email, otp string) (*model.OTPCode, error) {
 	return &code, result.Error
 }
 
-// Updates password reset token as used
+// Updates OTP as used
 func MarkOTPUsed(email, otp string) error {
 	return database.DB.Model(&model.OTPCode{}).Where("email = ? AND otp = ?", email, otp).Update("used", true).Error
 }
@@ -73,7 +73,7 @@ func MarkTokenUsed(token string) error {
 }
 
 // ==========================================
-// 🚀 BAGONG DAGDAG: ADMIN REGISTRATION APPROVALS
+// 🚀 ADMIN REGISTRATION APPROVALS
 // ==========================================
 
 // GetAllRegistrations - Kinukuha lahat ng nag-register
@@ -94,7 +94,7 @@ func UpdateUserStatus(schoolID string, status string, rejectReason string) error
 }
 
 // ==========================================
-// 🚀 BAGONG DAGDAG: MANAGE ACCOUNTS (LOCK/UNLOCK & DELETE)
+// 🚀 MANAGE ACCOUNTS (LOCK/UNLOCK & DELETE)
 // ==========================================
 
 // UpdateAccountStatus - Para sa Lock at Unlock (Admin manual action)
@@ -112,4 +112,16 @@ func UpdateAccountStatus(schoolID string, status string) error {
 // DeleteUserBySchoolID - Para mabura ang record ng pasaway na student
 func DeleteUserBySchoolID(schoolID string) error {
 	return database.DB.Where("school_id = ?", schoolID).Delete(&model.User{}).Error
+}
+
+// ==========================================
+// 📢 BAGONG DAGDAG: ROLE-BASED QUERIES (For Notifications)
+// ==========================================
+
+// GetUsersByRole - Kunin lahat ng active users base sa kanilang role (hal. "Student", "Admin", "Staff")
+func GetUsersByRole(role string) ([]model.User, error) {
+	var users []model.User
+	// Hahanapin natin yung mga may ganitong role at Active lang ang status para hindi masendan yung mga locked/pending
+	err := database.DB.Where("role = ? AND status = ?", role, "Active").Find(&users).Error
+	return users, err
 }

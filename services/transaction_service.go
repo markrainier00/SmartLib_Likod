@@ -13,16 +13,32 @@ type RequestInput struct {
 	PickupDate string `json:"pickup_date"`
 }
 
-type BorrowInput struct {
-	SchoolID   string `json:"school_id"`
-	ISBN       string `json:"isbn"`
-	BorrowDate string `json:"borrow_date"`
-	ReturnDate string `json:"return_date"`
-}
-
 type WishlistInput struct {
 	SchoolID string `json:"school_id"`
 	ISBN     string `json:"isbn"`
+}
+
+// 🔔 Helper Function: Save to DB & Send SSE
+func saveAndSendNotification(schoolID string, message string) {
+	newNotif := &model.Notification{
+		SchoolID: schoolID,
+		Message:  message,
+		IsRead:   false,
+	}
+
+	// Save to DB
+	repositories.CreateNotification(newNotif)
+
+	// Payload for SSE
+	payload := NotificationPayload{
+		ID:   int64(newNotif.ID),
+		Msg:  message,
+		Time: time.Now().Format("Jan 02, 3:04 PM"),
+		Read: false,
+	}
+
+	// Send to active client (direkta nang tinatawag ang NotifHub dito)
+	NotifHub.SendNotification(schoolID, payload)
 }
 
 func RequestBookService(input RequestInput) error {
@@ -38,7 +54,16 @@ func RequestBookService(input RequestInput) error {
 		PickupDate: pickupDate,
 	}
 
-	return repositories.CreateRequest(request)
+	err = repositories.CreateRequest(request)
+	if err != nil {
+		return err
+	}
+
+	// Trigger Notification
+	msg := "Your book request for ISBN " + input.ISBN + " has been submitted."
+	saveAndSendNotification(input.SchoolID, msg)
+
+	return nil
 }
 
 func AddWishlistService(input WishlistInput) error {
@@ -46,33 +71,36 @@ func AddWishlistService(input WishlistInput) error {
 		SchoolID: input.SchoolID,
 		ISBN:     input.ISBN,
 	}
-	return repositories.AddWishlist(w)
+
+	err := repositories.AddWishlist(w)
+	if err != nil {
+		return err
+	}
+
+	msg := "Book added to your wishlist!"
+	saveAndSendNotification(input.SchoolID, msg)
+
+	return nil
 }
 
 func RemoveWishlistService(input WishlistInput) error {
 	return repositories.RemoveWishlist(input.SchoolID, input.ISBN)
 }
 
-// func BorrowBookService(input BorrowInput) error {
-// 	count, err := repositories.HasActiveBorrow(input.SchoolID)
-// 	if err != nil {
-// 		return err
-// 	}
+func ReleaseBookService(schoolID string, isbn string) error {
+	err := repositories.ReleaseBookStatus(schoolID)
+	if err != nil {
+		return err
+	}
 
-// 	if count >= 3 {
-// 		return errors.New("you already have an active borrowed book")
-// 	}
+	msg := "Your book (ISBN: " + isbn + ") is now released. Happy reading!"
+	saveAndSendNotification(schoolID, msg)
 
-// 	tx := &model.Transaction{
-// 		SchoolID:   input.SchoolID,
-// 		ISBN:       input.ISBN,
-// 		Status:     "Pending",
-// 		BorrowDate: input.BorrowDate,
-// 	}
+	return nil
+}
 
-// 	return repositories.CreateTransaction(tx)
-// }
-
-func ReleaseBookService(schoolID string) error {
-	return repositories.ReleaseBookStatus(schoolID)
+func ApproveRequestService(schoolID string, isbn string) error {
+	msg := "Your request for ISBN " + isbn + " has been APPROVED. Please visit the library."
+	saveAndSendNotification(schoolID, msg)
+	return nil
 }

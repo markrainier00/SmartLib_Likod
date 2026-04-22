@@ -5,8 +5,6 @@ import (
 	"log"
 	"os"
 
-	"SmartLib_Likod/model" // 🚀 IDINAGDAG: Kailangan ito para makilala ng Go ang mga Structs mo
-
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -32,22 +30,7 @@ func ConnectDB() {
 		log.Fatal("Failed to connect to database. Check your .env file! Error: ", err)
 	}
 
-	fmt.Println("Database connected successfully!")
-
-	// 🚀 STEP 4: AUTOMIGRATE (DITO GAGAWAIN ANG MGA TABLES SA SUPABASE)
-	// Kapag nag-go run main.go ka, babasahin niya ito at gagawa ng tables kung wala pa.
-	err = db.AutoMigrate(
-		&model.Conversation{}, // Gagawa ng 'conversations' table para sa chat
-		&model.Message{},      // Gagawa ng 'messages' table para sa chat
-
-		// (Optional) Kung gusto mong automatic din niyang i-update ang ibang tables mo:
-		// &model.Book{},
-		// &model.User{},
-	)
-	if err != nil {
-		log.Fatal("Failed to migrate database tables! Error: ", err)
-	}
-	fmt.Println("Database tables migrated successfully!")
+	fmt.Println("✅ Database connected successfully!")
 
 	DB = db
 }

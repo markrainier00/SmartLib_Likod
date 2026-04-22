@@ -1,15 +1,16 @@
 package handler
 
 import (
-	errormodel "SmartLib_Likod/model/error"
-	"SmartLib_Likod/model/response"
-	"SmartLib_Likod/model/status"
-	"SmartLib_Likod/services"
+	"fmt"
 	"time"
 
 	"SmartLib_Likod/database"
 	"SmartLib_Likod/model"
+	errormodel "SmartLib_Likod/model/error"
+	"SmartLib_Likod/model/response"
+	"SmartLib_Likod/model/status"
 	"SmartLib_Likod/repositories"
+	"SmartLib_Likod/services"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -69,25 +70,25 @@ func RequestBook(c *fiber.Ctx) error {
 		})
 	}
 
+	// ==========================================
+	// 🔔 MGA TRIGGERS PARA SA NOTIFICATION
+	// ==========================================
+
+	// 1. Notif para sa Student (Papasok sa history nila)
+	msg := fmt.Sprintf("Your book request for ISBN %s has been submitted.", input.ISBN)
+	sendStudentNotification(input.SchoolID, msg)
+
+	// 2. Real-time Notif para sa ADMIN at STAFF (Ito ang magpapatunog ng bell ni Mark)
+	adminMsg := fmt.Sprintf("New Book Request: Student %s is requesting ISBN %s. Review now.", input.SchoolID, input.ISBN)
+	services.BroadcastToRole("Admin", adminMsg)
+	services.BroadcastToRole("Staff", adminMsg)
+
 	return c.Status(fiber.StatusCreated).JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "Book request saved successfully",
 		Data:    nil,
 	})
 }
-
-// func BorrowBook(c *fiber.Ctx) error {
-// 	var input services.BorrowInput
-// 	if err := c.BodyParser(&input); err != nil {
-// 		return c.Status(400).JSON(fiber.Map{"message": "Invalid input format", "isSuccess": false})
-// 	}
-
-// 	if err := services.BorrowBookService(input); err != nil {
-// 		return c.Status(400).JSON(fiber.Map{"message": err.Error(), "isSuccess": false})
-// 	}
-
-// 	return c.Status(201).JSON(fiber.Map{"message": "Request sent to Staff!", "isSuccess": true})
-// }
 
 func AddWishlistHandler(c *fiber.Ctx) error {
 	var input services.WishlistInput
@@ -240,6 +241,10 @@ func ApproveRequestHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	// 🔔 TRIGGER: Notif para sa Student kapag na-approve
+	msg := fmt.Sprintf("Your request to borrow book (ISBN: %s) has been APPROVED!", isbn)
+	sendStudentNotification(transaction.SchoolID, msg)
+
 	return c.Status(200).JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "Book borrow request approved",
@@ -278,6 +283,10 @@ func RejectRequestHandler(c *fiber.Ctx) error {
 			"message":   "Failed to process book borrow request rejection.",
 		})
 	}
+
+	// 🔔 TRIGGER: Notif para sa Student kapag na-reject
+	msg := fmt.Sprintf("Your book request was REJECTED. Reason: %s", transaction.RejectReason)
+	sendStudentNotification(transaction.SchoolID, msg)
 
 	return c.Status(200).JSON(response.ResponseModel{
 		RetCode: "200",
@@ -362,8 +371,38 @@ func ReturnBookHandler(c *fiber.Ctx) error {
 	}
 	tx.Commit()
 
+	// 🔔 TRIGGER: Notif para sa Student kapag naibalik na ang libro
+	msg := "Your book has been marked as RETURNED."
+	if input.OverduePoint > 0 {
+		msg += " Note: Returned late."
+	}
+	sendStudentNotification(transaction.SchoolID, msg)
+
 	return c.Status(200).JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "Book marked as returned.",
 	})
+}
+
+// ==========================================
+// 🚀 HELPER FUNCTION PARA SA NOTIFICATIONS
+// ==========================================
+
+func sendStudentNotification(schoolID string, message string) {
+	// 1. I-save sa database
+	notif := &model.Notification{
+		SchoolID: schoolID,
+		Message:  message,
+		IsRead:   false,
+	}
+	database.DB.Create(notif)
+
+	// 2. I-send nang live sa React frontend
+	payload := services.NotificationPayload{
+		ID:   int64(notif.ID),
+		Msg:  message,
+		Time: time.Now().Format("Jan 02, 3:04 PM"),
+		Read: false,
+	}
+	services.NotifHub.SendNotification(schoolID, payload)
 }
