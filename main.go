@@ -29,12 +29,13 @@ func main() {
 		&model.User{},
 		&model.PasswordReset{},
 		&model.Transaction{},
-		&model.Penalty{},
 		&model.OTPCode{},
 		&model.School{},
 		&model.Book{},
 		&model.Concern{},
 		&model.Wishlist{},
+		&model.TransactionHistory{},
+		&model.InformationChangeRequest{},
 		&model.Notification{},
 		&model.Conversation{}, // 🚀 Idinagdag para sa Chat
 		&model.Message{},      // 🚀 Idinagdag para sa Chat

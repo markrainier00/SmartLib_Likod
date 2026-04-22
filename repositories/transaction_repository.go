@@ -21,39 +21,55 @@ func RemoveWishlist(schoolID string, isbn string) error {
 		Delete(&model.Wishlist{}).Error
 }
 
-func HasActiveRequest(schoolID string, isbn string) (int64, error) {
+func HasActiveBorrow(schoolID string, isbn string) (int64, error) {
 	var count int64
 
 	err := database.DB.Model(&model.Transaction{}).
-		Where("school_id = ? AND isbn = ? AND status IN ('Pending', 'Borrowed')", schoolID, isbn).
+		Where("school_id = ? AND isbn = ? AND status = ?", schoolID, isbn, "Borrowed").
 		Count(&count).Error
 
 	return count, err
 }
 
-// GetTransactionHistory - Para sa "Borrow History" ng student
-func GetTransactionHistory(schoolID string) ([]model.Transaction, error) {
+func HasActiveRequest(schoolID string, isbn string) (int64, error) {
+	var count int64
+
+	err := database.DB.Model(&model.Transaction{}).
+		Where("school_id = ? AND isbn = ? AND status = ?", schoolID, isbn, "Pending").
+		Count(&count).Error
+
+	return count, err
+}
+
+func GetStudentTransaction(schoolID string) ([]model.Transaction, error) {
 	var history []model.Transaction
+
+	err := database.DB.Where("school_id = ? AND status != ?", schoolID, "Pending").Order("id desc").Find(&history).Error
+	return history, err
+}
+
+func GetStudentAllTransaction(schoolID string) ([]model.Transaction, error) {
+	var history []model.Transaction
+
 	err := database.DB.Where("school_id = ?", schoolID).Order("id desc").Find(&history).Error
 	return history, err
 }
 
-// GetAllPendingRequests - Para sa Admin "Pending Approvals" list
-func GetAllPendingRequests() ([]model.Transaction, error) {
-	var requests []model.Transaction
-	err := database.DB.Where("status = ?", "Pending").Order("id desc").Find(&requests).Error
-	return requests, err
+func GetStudentHistory(schoolID string) ([]model.TransactionHistory, error) {
+	var history []model.TransactionHistory
+
+	err := database.DB.Where("school_id = ?", schoolID).Order("id desc").Find(&history).Error
+	return history, err
 }
 
-// ReleaseBookStatus - Update status from 'Pending' to 'Borrowed' (Scanner Action)
-// ✅ FIX: I-update din ang updated_at para lumabas ang Date Approved sa frontend
-func ReleaseBookStatus(schoolID string) error {
-	return database.DB.Model(&model.Transaction{}).
-		Where("school_id = ? AND status = ?", schoolID, "Pending").
-		Updates(map[string]interface{}{
-			"status":     "Borrowed",
-			"updated_at": time.Now(),
-		}).Error
+func GetWholeHistory() ([]model.TransactionHistory, error) {
+	var history []model.TransactionHistory
+
+	err := database.DB.
+		Order("id desc").
+		Find(&history).Error
+
+	return history, err
 }
 
 func GetAllRequests() ([]model.Transaction, error) {
@@ -69,24 +85,4 @@ func UpdateTransactionStatus(schoolID string, oldStatus string, newStatus string
 			"status":     newStatus,
 			"updated_at": time.Now(),
 		}).Error
-}
-
-// --- DASHBOARD STATS QUERIES ---
-
-func GetPendingRegCount() int64 {
-	var count int64
-	database.DB.Model(&model.User{}).Where("status = ?", "New").Count(&count)
-	return count
-}
-
-func GetPendingBorrowCount() int64 {
-	var count int64
-	database.DB.Model(&model.Transaction{}).Where("status = ?", "Pending").Count(&count)
-	return count
-}
-
-func GetActiveBorrowCount() int64 {
-	var count int64
-	database.DB.Model(&model.Transaction{}).Where("status = ?", "Borrowed").Count(&count)
-	return count
 }

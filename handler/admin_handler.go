@@ -133,6 +133,22 @@ func GetAllUsers(c *fiber.Ctx) error {
 	})
 }
 
+func GetStudentUsers(c *fiber.Ctx) error {
+	users, err := services.GetStudentUsersService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
+	})
+}
 func UpdateUserStatus(c *fiber.Ctx) error {
 	var input services.UpdateUserStatusInput
 
@@ -196,6 +212,46 @@ func DeleteUser(c *fiber.Ctx) error {
 		RetCode: "200",
 		Message: "User deleted successfully",
 		Data:    nil,
+	})
+}
+
+func RejectInformationRequestHandler(c *fiber.Ctx) error {
+	var input struct {
+		ID           uint   `json:"id"`
+		RejectReason string `json:"reject_reason"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid input",
+		})
+	}
+
+	if input.ID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "ID is required",
+		})
+	}
+
+	if input.RejectReason == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Reject reason is required",
+		})
+	}
+
+	if err := services.RejectInformationRequest(input.ID, input.RejectReason); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"message":   "Request rejected successfully",
 	})
 }
 
