@@ -9,9 +9,10 @@ const (
 	RetCode500 = "Internal Server Error"
 
 	// User status
-	UserStatusPending = "Pending"
-	UserStatusActive  = "Active"
-	UserStatusLocked  = "Locked"
+	UserStatusPending  = "Pending"
+	UserStatusActive   = "Active"
+	UserStatusLocked   = "Locked"
+	UserStatusArchived = "Archived"
 
 	RoleStudent = "Student"
 	RoleStaff   = "Staff"

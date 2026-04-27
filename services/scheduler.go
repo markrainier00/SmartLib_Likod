@@ -20,7 +20,7 @@ func StartCronJobs() {
 
 	c := cron.New(cron.WithLocation(manilaTime))
 
-	c.AddFunc("7 1 * * *", func() {
+	c.AddFunc("0 0 * * *", func() {
 		log.Println("Checking for due dates...")
 		checkDueDates()
 
@@ -80,6 +80,18 @@ func checkExpiredPickups() {
 			continue
 		}
 
+		history := model.TransactionHistory{
+			TransactionID: tx.ID,
+			SchoolID:      tx.SchoolID,
+			ISBN:          tx.ISBN,
+			Event:         "Reject",
+			Staff:         "System",
+			Date:          time.Now(),
+		}
+		if err := database.DB.Create(&history).Error; err != nil {
+			log.Printf("Cron Error: Failed to create history for transaction ID %d: %v\n", tx.ID, err)
+		}
+
 		var book model.Book
 		title := tx.ISBN
 		if err := database.DB.Where("isbn = ?", tx.ISBN).First(&book).Error; err == nil {
@@ -88,7 +100,7 @@ func checkExpiredPickups() {
 
 		msg := fmt.Sprintf("REJECTED: Your scheduled pickup for \"%s\" on %s was automatically rejected due to no-show. Please request again if still needed.",
 			title,
-			tx.PickupDate.Format("Jan 02, 2006"),
+			tx.PickupDate.Format("Jan 02, 2006 3:04 PM"),
 		)
 		SendSystemNotification(tx.SchoolID, msg)
 

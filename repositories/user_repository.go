@@ -114,14 +114,17 @@ func DeleteUserBySchoolID(schoolID string) error {
 	return database.DB.Where("school_id = ?", schoolID).Delete(&model.User{}).Error
 }
 
-// ==========================================
-// 📢 BAGONG DAGDAG: ROLE-BASED QUERIES (For Notifications)
-// ==========================================
-
-// GetUsersByRole - Kunin lahat ng active users base sa kanilang role (hal. "Student", "Admin", "Staff")
 func GetUsersByRole(role string) ([]model.User, error) {
 	var users []model.User
-	// Hahanapin natin yung mga may ganitong role at Active lang ang status para hindi masendan yung mga locked/pending
 	err := database.DB.Where("role = ? AND status = ?", role, "Active").Find(&users).Error
 	return users, err
+}
+
+func GetWishlistNotifyUsersByBook(ISBN string) ([]string, error) {
+	var schoolIDs []string
+	err := database.DB.Table("wishlists").
+		Select("school_id").
+		Where("isbn = ? AND status = ?", ISBN, "Notify").
+		Scan(&schoolIDs).Error
+	return schoolIDs, err
 }

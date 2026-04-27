@@ -11,5 +11,5 @@ func SetupBooks(api fiber.Router) {
 	books.Get("/getBooks", handler.GetAllBooks)
 	books.Post("/addBook", handler.AddBookHandler)
 	books.Put("/updateBook/:id", handler.UpdateBookHandler)
-	books.Delete("/:id", handler.DeleteBook)
+	books.Delete("/deleteBook/:id", handler.DeleteBook)
 }
