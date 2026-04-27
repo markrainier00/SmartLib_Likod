@@ -11,6 +11,7 @@ import (
 	"SmartLib_Likod/model/status"
 	"SmartLib_Likod/repositories"
 	"SmartLib_Likod/services"
+	"SmartLib_Likod/utils"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -92,6 +93,38 @@ func RequestBook(c *fiber.Ctx) error {
 	})
 }
 
+func CancelRequestHandler(c *fiber.Ctx) error {
+	var input struct {
+		ID uint `json:"id"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid input",
+		})
+	}
+
+	if input.ID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "ID is required",
+		})
+	}
+
+	if err := services.CancelRequestService(input.ID); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"message":   "Request cancelled successfully",
+	})
+}
+
 func AddWishlistHandler(c *fiber.Ctx) error {
 	var input services.Wishlist
 
@@ -139,6 +172,32 @@ func RemoveWishlistHandler(c *fiber.Ctx) error {
 	return c.JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "Removed from wishlist",
+	})
+}
+
+func ToggleWishlistNotifyHandler(c *fiber.Ctx) error {
+	var input struct {
+		SchoolID string `json:"school_id"`
+		ISBN     string `json:"isbn"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid input",
+		})
+	}
+
+	if err := services.ToggleWishlistNotify(input.SchoolID, input.ISBN); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"message":   "Wishlist notify toggled",
 	})
 }
 
@@ -237,10 +296,15 @@ func ApproveBorrowRequestHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	// 🔔 NOTIF: APPROVED (Ready for Pick-up)
 	var tx model.Transaction
 	if err := database.DB.First(&tx, input.TransactionID).Error; err == nil {
-		msg := fmt.Sprintf("Request Approved: Your requested book (ISBN: %s) is ready. Please claim it at the library desk.", tx.ISBN)
+		var book model.Book
+		title := tx.ISBN
+		if err := database.DB.Where("isbn = ?", tx.ISBN).First(&book).Error; err == nil {
+			title = book.Title
+		}
+
+		msg := fmt.Sprintf("REQUEST APPROVED: Your requested book \"%s\" is ready. Please claim it at the library desk.", title)
 		sendStudentNotification(tx.SchoolID, msg)
 	}
 
@@ -278,10 +342,15 @@ func RejectBorrowRequestHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	// 🔔 NOTIF: REJECTED (Formal)
 	var tx model.Transaction
 	if err := database.DB.First(&tx, input.TransactionID).Error; err == nil {
-		msg := fmt.Sprintf("Request Declined: Your request for the book (ISBN: %s) could not be processed. Reason: %s.", tx.ISBN, input.RejectReason)
+		var book model.Book
+		title := tx.ISBN
+		if err := database.DB.Where("isbn = ?", tx.ISBN).First(&book).Error; err == nil {
+			title = book.Title
+		}
+
+		msg := fmt.Sprintf("REQUEST REJECTED: Your request for the book \"%s\" could not be processed. Reason: %s.", title, input.RejectReason)
 		sendStudentNotification(tx.SchoolID, msg)
 	}
 
@@ -319,10 +388,15 @@ func ProcessBookBorrowHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	// 🔔 TRIGGER: NOTIF KAPAG KINUHA NA NI STUDENT (Official Borrow)
 	var tx model.Transaction
 	if err := database.DB.First(&tx, input.TransactionID).Error; err == nil {
-		msg := fmt.Sprintf("Transaction Processed: You have successfully borrowed the book (ISBN: %s). Please return it on or before the due date.", tx.ISBN)
+		var book model.Book
+		title := tx.ISBN
+		if err := database.DB.Where("isbn = ?", tx.ISBN).First(&book).Error; err == nil {
+			title = book.Title
+		}
+
+		msg := fmt.Sprintf("BOOK BORROWED: You have successfully borrowed the book \"%s\". Please return it on or before the due date.", title)
 		sendStudentNotification(tx.SchoolID, msg)
 	}
 
@@ -411,6 +485,10 @@ func ReturnBookHandler(c *fiber.Ctx) error {
 			base = user.EndLockDate
 		}
 		user.EndLockDate = base.AddDate(0, 0, input.ViolationCount)
+
+		if user.OffenseCount >= 3 {
+			user.Status = "Locked"
+		}
 	}
 
 	transaction.Violation = input.Violation
@@ -448,7 +526,13 @@ func ReturnBookHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	beforeAvailable := book.Available
+
 	book.Available += 1
+
+	if beforeAvailable == 0 {
+		go services.NotifyWishlistUsers(book.ISBN, book.Title)
+	}
 
 	if err := tx.Save(&book).Error; err != nil {
 		tx.Rollback()
@@ -482,12 +566,28 @@ func ReturnBookHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	// 🔔 NOTIF: RETURNED (Formal)
-	msg := "Transaction Closed: Your borrowed book has been successfully returned."
-	if input.OverduePoint > 0 {
-		msg = "Transaction Closed: Your borrowed book has been successfully returned. (Status: Returned Late)."
+	if err := tx.Commit().Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Transaction commit failed.",
+		})
+	}
+
+	title := transaction.ISBN
+	if err := database.DB.Where("isbn = ?", transaction.ISBN).First(&book).Error; err == nil {
+		title = book.Title
+	}
+
+	msg := fmt.Sprintf("BOOK RETURNED: Your borrowed \"%s\" has been successfully returned.", title)
+	if input.ViolationCount > 0 {
+		msg = fmt.Sprintf("BOOK RETURNED: Your borrowed \"%s\" has been successfully returned. Due to your violation (%s), you have %d-day borrow ban.", title, input.Violation, input.ViolationCount)
 	}
 	sendStudentNotification(transaction.SchoolID, msg)
+
+	if user.OffenseCount >= 3 && user.Status == "Locked" {
+		fullName := user.FirstName + " " + user.LastName
+		go utils.SendAccountLockedEmail(user.Email, fullName)
+	}
 
 	return c.Status(200).JSON(response.ResponseModel{
 		RetCode: "200",
@@ -594,11 +694,10 @@ func GetWholeHistory(c *fiber.Ctx) error {
 }
 
 // ==========================================
-// 🚀 HELPER FUNCTION PARA SA NOTIFICATIONS
+//  HELPER FUNCTION PARA SA NOTIFICATIONS
 // ==========================================
 
 func sendStudentNotification(schoolID string, message string) {
-	// 1. I-save sa database
 	notif := model.Notification{
 		SchoolID: schoolID,
 		Message:  message,
@@ -606,7 +705,6 @@ func sendStudentNotification(schoolID string, message string) {
 	}
 	database.DB.Create(&notif)
 
-	// 2. I-send nang live sa React frontend
 	payload := services.NotificationPayload{
 		ID:   int64(notif.ID),
 		Msg:  message,

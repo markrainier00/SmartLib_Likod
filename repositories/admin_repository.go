@@ -6,6 +6,26 @@ import (
 	"SmartLib_Likod/model/status"
 )
 
+func CreateSchool(school *model.School) error {
+	return database.DB.Create(school).Error
+}
+
+func UpdateSchool(id uint, input model.School) error {
+	return database.DB.Model(&model.School{}).
+		Where("id = ?", id).
+		Updates(input).Error
+}
+
+func DeleteSchool(id uint) error {
+	return database.DB.Delete(&model.School{}, id).Error
+}
+
+func FindSchoolByID(id uint) (*model.School, error) {
+	var school model.School
+	result := database.DB.First(&school, id)
+	return &school, result.Error
+}
+
 func GetPendingUsers() ([]model.User, error) {
 	var users []model.User
 	result := database.DB.

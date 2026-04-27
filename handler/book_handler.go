@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -108,17 +109,6 @@ func AddBookHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	// ==========================================
-	// 📢 TRIGGER: BROADCAST SA LAHAT NG STUDENTS
-	// ==========================================
-	// Kapag successful ang pag-add ng libro, magpapadala tayo ng notification sa lahat!
-	broadcastMsg := fmt.Sprintf("New Arrival: Ang librong '%s' by %s ay available na ngayon sa library!", input.Title, input.Author)
-
-	// Tinawag natin yung BroadcastToRole function na ginawa natin kanina
-	// Papasok ito sa database ng lahat ng "Student" at tutunog nang live sa browser nila
-	services.BroadcastToRole("Student", broadcastMsg)
-	// ==========================================
-
 	return c.Status(fiber.StatusCreated).JSON(response.ResponseModel{
 		RetCode: "200",
 		Data:    book,
@@ -153,6 +143,42 @@ func UpdateBookHandler(c *fiber.Ctx) error {
 			"isSuccess": false,
 			"message":   "Invalid input data",
 		})
+	}
+
+	oldCopiesStr := book.Copies
+	newCopiesStr := input.Copies
+
+	oldCopies, err := strconv.Atoi(oldCopiesStr)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid existing copies value.",
+		})
+	}
+
+	newCopies, err := strconv.Atoi(newCopiesStr)
+	if err != nil || newCopies < 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid copies value.",
+		})
+	}
+
+	beforeAvailable := book.Available
+	diff := newCopies - oldCopies
+
+	if diff > 0 {
+		book.Available += diff
+
+	} else if diff < 0 {
+		reduction := -diff
+		if book.Available < reduction {
+			return c.Status(400).JSON(fiber.Map{
+				"isSuccess": false,
+				"message":   fmt.Sprintf("Cannot reduce copies by %d. Only %d available.", reduction, book.Available),
+			})
+		}
+		book.Available -= reduction
 	}
 
 	book.Title = input.Title
@@ -208,6 +234,10 @@ func UpdateBookHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	if beforeAvailable == 0 && book.Available > 0 {
+		go services.NotifyWishlistUsers(book.ISBN, book.Title)
+	}
+
 	return c.Status(200).JSON(response.ResponseModel{
 		RetCode: "200",
 		Message: "Book updated successfully.",
@@ -215,28 +245,37 @@ func UpdateBookHandler(c *fiber.Ctx) error {
 	})
 }
 
-// ==========================================
-// 🚀 DELETE: BURAHIN ANG LIBRO
-// ==========================================
 func DeleteBook(c *fiber.Ctx) error {
-	id := c.Params("id") // Kukunin ang ID mula sa URL
+	id := c.Params("id")
 
-	// 👁️ CCTV: Tingnan natin kung anong ID ang gustong burahin
-	fmt.Println("🗑️ TANGKANG BURAHIN ANG LIBRO. ID:", id)
+	var book model.Book
+	if err := database.DB.First(&book, id).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Book not found.",
+		})
+	}
 
-	// Uutusan ang GORM na burahin ang record sa database
+	copies, _ := strconv.Atoi(book.Copies)
+	if book.Available != copies {
+		borrowed := copies - book.Available
+		unit := "copies"
+		if borrowed == 1 {
+			unit = "copy"
+		}
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   fmt.Sprintf("Cannot delete this book. %d %s are currently borrowed.", borrowed, unit),
+		})
+	}
+
 	result := database.DB.Delete(&model.Book{}, id)
-
 	if result.Error != nil {
-		fmt.Println("🚨 SUPABASE DELETE ERROR:", result.Error)
 		return c.Status(500).JSON(fiber.Map{
 			"isSuccess": false,
 			"message":   "Failed to delete book",
 		})
 	}
-
-	// Success!
-	fmt.Println("✅ SUCCESS! NABURA NA ANG LIBRO SA SUPABASE. ID:", id)
 
 	return c.JSON(fiber.Map{
 		"isSuccess": true,

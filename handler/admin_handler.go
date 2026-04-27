@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"SmartLib_Likod/database"
@@ -64,6 +67,84 @@ func GetRegistrationHistoryHandler(c *fiber.Ctx) error {
 	})
 }
 
+func CreateProgramHandler(c *fiber.Ctx) error {
+	var input services.SchoolInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "Invalid input."})
+	}
+	if input.Department == "" || input.Program == "" || input.Duration == 0 {
+		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "All fields are required."})
+	}
+
+	school, err := services.CreateSchoolService(input)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"isSuccess": false, "message": "Failed to create program."})
+	}
+
+	return c.Status(201).JSON(response.ResponseModel{
+		RetCode: "201",
+		Message: "Program created successfully.",
+		Data:    school,
+	})
+}
+
+func UpdateProgramHandler(c *fiber.Ctx) error {
+	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "Invalid ID."})
+	}
+
+	var input services.SchoolInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "Invalid input."})
+	}
+	if input.Department == "" || input.Program == "" || input.Duration == 0 {
+		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "All fields are required."})
+	}
+
+	if err := services.UpdateSchoolService(uint(id), input); err != nil {
+		return c.Status(404).JSON(fiber.Map{"isSuccess": false, "message": err.Error()})
+	}
+
+	return c.Status(200).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Program updated successfully.",
+	})
+}
+
+func DeleteProgramHandler(c *fiber.Ctx) error {
+	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"isSuccess": false, "message": "Invalid ID."})
+	}
+
+	if err := services.DeleteSchoolService(uint(id)); err != nil {
+		return c.Status(404).JSON(fiber.Map{"isSuccess": false, "message": err.Error()})
+	}
+
+	return c.Status(200).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Program deleted successfully.",
+	})
+}
+
+func GetSchool(c *fiber.Ctx) error {
+	school, err := services.GetSchoolService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    school,
+	})
+}
+
 func GetWholeUsers(c *fiber.Ctx) error {
 	users, err := services.GetWholeUsersService()
 	if err != nil {
@@ -115,6 +196,40 @@ func GetPendingUsers(c *fiber.Ctx) error {
 	})
 }
 
+func GetArchivedStudents(c *fiber.Ctx) error {
+	users, err := services.GetArchivedStudentsService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
+	})
+}
+
+func GetArchivedUsers(c *fiber.Ctx) error {
+	users, err := services.GetArchivedUsersService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
+	})
+}
+
 func ApproveUser(c *fiber.Ctx) error {
 	var input services.ApproveRejectInput
 
@@ -141,9 +256,6 @@ func ApproveUser(c *fiber.Ctx) error {
 			Error:     err,
 		})
 	}
-
-	msg := "System Notice: Your SmartLib account registration has been approved. You may now access the portal."
-	sendStudentNotification(input.SchoolID, msg)
 
 	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
 		RetCode: "200",
@@ -264,6 +376,38 @@ func UpdateUserStatus(c *fiber.Ctx) error {
 	})
 }
 
+func ApproveInformationRequestHandler(c *fiber.Ctx) error {
+	var input struct {
+		ID uint `json:"id"`
+	}
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "Invalid input",
+		})
+	}
+
+	if input.ID == 0 {
+		return c.Status(400).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   "ID is required",
+		})
+	}
+
+	if err := services.ApproveInformationRequest(input.ID); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"isSuccess": false,
+			"message":   err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"isSuccess": true,
+		"message":   "Request approved successfully",
+	})
+}
+
 func RejectInformationRequestHandler(c *fiber.Ctx) error {
 	var input struct {
 		ID           uint   `json:"id"`
@@ -304,6 +448,40 @@ func RejectInformationRequestHandler(c *fiber.Ctx) error {
 	})
 }
 
+func GetAllAccounts(c *fiber.Ctx) error {
+	users, err := services.GetAllAccountsService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
+	})
+}
+
+func GetInformationChange(c *fiber.Ctx) error {
+	users, err := services.GetInformationChangeService()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Failed to fetch users",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Users fetched successfully",
+		Data:    users,
+	})
+}
+
 type MonthlyData struct {
 	M   string `json:"m"`
 	Val int    `json:"val"`
@@ -323,88 +501,162 @@ type TopBookData struct {
 }
 
 func GetAnalyticsFullHandler(c *fiber.Ctx) error {
-	_ = c.Query("range", "This Year")
+	fromStr := c.Query("from", "")
+	toStr := c.Query("to", "")
+	view := c.Query("view", "monthly")
+
+	now := time.Now()
+	from := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.Local)
+	to := time.Date(now.Year(), 12, 31, 23, 59, 59, 0, time.Local)
+
+	if fromStr != "" {
+		if parsed, err := time.Parse("2006-01-02", fromStr); err == nil {
+			from = parsed
+		}
+	}
+	if toStr != "" {
+		if parsed, err := time.Parse("2006-01-02", toStr); err == nil {
+			to = parsed.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+		}
+	}
 
 	var totalBooks int64
-	var activeBorrows int64
-	var overdueBooks int64
+	database.DB.Model(&model.Book{}).
+		Select("COALESCE(SUM(CAST(copies AS INTEGER)), 0)").
+		Scan(&totalBooks)
+
+	var totalReserved int64
+	var totalAvailable int64
+	database.DB.Model(&model.Book{}).
+		Select("COALESCE(SUM(reserved), 0)").
+		Scan(&totalReserved)
+	database.DB.Model(&model.Book{}).
+		Select("COALESCE(SUM(available), 0)").
+		Scan(&totalAvailable)
+	activeBorrows := totalBooks - (totalReserved + totalAvailable)
+
 	var totalStudents int64
-
-	database.DB.Model(&model.Book{}).Count(&totalBooks)
-
-	database.DB.Model(&model.Transaction{}).Where("status = ?", "Borrowed").Count(&activeBorrows)
-
-	database.DB.Model(&model.Transaction{}).
-		Where("status = ? AND due_date < CURRENT_TIMESTAMP", "Borrowed").
-		Count(&overdueBooks)
-
 	database.DB.Model(&model.User{}).
 		Where("LOWER(role) = ? AND LOWER(status) = ?", "student", "active").
 		Count(&totalStudents)
 
-	allMonths := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
-	monthValues := make(map[string]int)
-	for _, m := range allMonths {
-		monthValues[m] = 0
-	}
-
-	var dbResults []struct {
-		Month string
+	// ==========================================
+	// Monthly Data — respects view mode + date range
+	// ==========================================
+	type MonthlyRaw struct {
+		Label string
 		Total int
 	}
 
-	database.DB.Model(&model.Transaction{}).
-		Select("TO_CHAR(created_at, 'Mon') as month, count(*) as total").
-		Where("EXTRACT(YEAR FROM created_at) = ?", time.Now().Year()).
-		Group("month").
-		Scan(&dbResults)
-
-	for _, res := range dbResults {
-		monthValues[res.Month] = res.Total
-	}
-
+	var rawResults []MonthlyRaw
 	var monthly []MonthlyData
-	for _, m := range allMonths {
-		monthly = append(monthly, MonthlyData{M: m, Val: monthValues[m]})
+
+	switch view {
+	case "daily":
+		database.DB.Model(&model.Transaction{}).
+			Select("TO_CHAR(created_at, 'YYYY-MM-DD') as label, count(*) as total").
+			Where("created_at BETWEEN ? AND ?", from, to).
+			Group("label").
+			Order("label asc").
+			Scan(&rawResults)
+
+		// Fill all days in range
+		dayMap := make(map[string]int)
+		for _, r := range rawResults {
+			dayMap[r.Label] = r.Total
+		}
+		cursor := from
+		for !cursor.After(to) {
+			key := cursor.Format("2006-01-02")
+			monthly = append(monthly, MonthlyData{M: key, Val: dayMap[key]})
+			cursor = cursor.AddDate(0, 0, 1)
+		}
+
+	case "yearly":
+		database.DB.Model(&model.Transaction{}).
+			Select("TO_CHAR(created_at, 'YYYY') as label, count(*) as total").
+			Where("created_at BETWEEN ? AND ?", from, to).
+			Group("label").
+			Order("label asc").
+			Scan(&rawResults)
+
+		yearMap := make(map[string]int)
+		for _, r := range rawResults {
+			yearMap[r.Label] = r.Total
+		}
+		for y := from.Year(); y <= to.Year(); y++ {
+			key := fmt.Sprintf("%d", y)
+			monthly = append(monthly, MonthlyData{M: key, Val: yearMap[key]})
+		}
+
+	default: // monthly
+		database.DB.Model(&model.Transaction{}).
+			Select("TO_CHAR(created_at, 'Mon') as label, count(*) as total").
+			Where("created_at BETWEEN ? AND ?", from, to).
+			Group("label").
+			Order("MIN(created_at) asc").
+			Scan(&rawResults)
+
+		allMonths := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+		monthMap := make(map[string]int)
+		for _, r := range rawResults {
+			monthMap[r.Label] = r.Total
+		}
+		for _, m := range allMonths {
+			monthly = append(monthly, MonthlyData{M: m, Val: monthMap[m]})
+		}
 	}
 
 	// ==========================================
-	// 🚀 ALL CATEGORIES FIX (Tinanggal na natin ang .Limit)
+	// Categories — filtered by date range
 	// ==========================================
 	var catCounts []struct {
 		Category string
 		Count    int
 	}
 
-	database.DB.Model(&model.Book{}).
-		Select("category, count(*) as count").
-		Group("category").
-		Order("count desc").
-		Scan(&catCounts)
+	database.DB.Raw(`
+        SELECT
+            CASE
+                WHEN TRIM(cat) = '' OR TRIM(cat) IS NULL THEN 'Uncategorized'
+                ELSE TRIM(cat)
+            END AS category,
+            COUNT(*) AS count
+        FROM transaction_histories t
+        JOIN books b ON b.isbn = t.isbn,
+            UNNEST(STRING_TO_ARRAY(COALESCE(NULLIF(TRIM(b.category), ''), 'Uncategorized'), ',')) AS cat
+        WHERE t.event IN ('Borrow', 'Return')
+          AND t.date BETWEEN ? AND ?
+        GROUP BY
+            CASE
+                WHEN TRIM(cat) = '' OR TRIM(cat) IS NULL THEN 'Uncategorized'
+                ELSE TRIM(cat)
+            END
+        ORDER BY count DESC
+    `, from, to).Scan(&catCounts)
 
-	var categories []CategoryData
+	totalCatCount := 0
+	for _, cat := range catCounts {
+		totalCatCount += cat.Count
+	}
+
 	colors := []string{"#3d8bef", "#7c3aed", "#4caf6e", "#f59e0b", "#ec4899", "#06b6d4", "#f97316"}
+	var categories []CategoryData
 
 	if len(catCounts) > 0 {
-		for i, c := range catCounts {
+		for i, cat := range catCounts {
 			pct := 0
-			if totalBooks > 0 {
-				pct = int((float64(c.Count) / float64(totalBooks)) * 100)
+			if totalCatCount > 0 {
+				pct = int((float64(cat.Count) / float64(totalCatCount)) * 100)
 			}
-
-			// Paikot na kulay para hindi mag-error kahit madami
-			color := colors[i%len(colors)]
-
-			// 🚀 FIX: Palitan ang blank string ng "Uncategorized"
-			catName := c.Category
-			if catName == "" || catName == " " {
+			catName := strings.TrimSpace(cat.Category)
+			if catName == "" {
 				catName = "Uncategorized"
 			}
-
 			categories = append(categories, CategoryData{
 				Cat:   catName,
 				Pct:   pct,
-				Color: color,
+				Color: colors[i%len(colors)],
 			})
 		}
 	} else {
@@ -413,23 +665,30 @@ func GetAnalyticsFullHandler(c *fiber.Ctx) error {
 		}
 	}
 
+	// ==========================================
+	// Top Borrowed Books — filtered by date range
+	// ==========================================
 	var topBorrows []struct {
 		ISBN  string
 		Count int
 	}
 
-	database.DB.Model(&model.Transaction{}).Select("isbn, count(*) as count").Group("isbn").Order("count desc").Limit(5).Scan(&topBorrows)
+	database.DB.Model(&model.Transaction{}).
+		Select("isbn, count(*) as count").
+		Where("created_at BETWEEN ? AND ?", from, to).
+		Group("isbn").
+		Order("count desc").
+		Limit(5).
+		Scan(&topBorrows)
 
 	var top []TopBookData
 	for _, tb := range topBorrows {
 		var book model.Book
 		database.DB.Where("isbn = ?", tb.ISBN).First(&book)
-
 		title := book.Title
 		if title == "" {
 			title = "Unknown Book (ISBN: " + tb.ISBN + ")"
 		}
-
 		top = append(top, TopBookData{
 			Title:   title,
 			Author:  book.Author,
@@ -447,7 +706,6 @@ func GetAnalyticsFullHandler(c *fiber.Ctx) error {
 		"data": fiber.Map{
 			"totalBooks":    totalBooks,
 			"activeBorrows": activeBorrows,
-			"overdueBooks":  overdueBooks,
 			"totalStudents": totalStudents,
 			"monthly":       monthly,
 			"categories":    categories,

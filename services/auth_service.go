@@ -223,9 +223,11 @@ func SigninUser(input SigninInput) (*model.User, error) {
 	if user.Status == status.UserStatusPending {
 		return nil, errors.New("Your account is not yet approved by the admin.")
 	} else if user.Status == status.UserStatusLocked {
-		return nil, errors.New("Your account has been locked, please contact the admin.")
+		return nil, errors.New("Your account has been locked, please contact the administrator.")
+	} else if user.Status == status.UserStatusArchived {
+		return nil, errors.New("Your account has been disabled, please contact the administrator.")
 	} else if user.Status != status.UserStatusActive {
-		return nil, errors.New("Your account status is invalid, please contact the admin.")
+		return nil, errors.New("Your account status is invalid, please contact the administrator.")
 	}
 
 	return user, nil
@@ -341,18 +343,31 @@ func UpdateUserStatusService(input UpdateUserStatusInput) error {
 		"Archived": true,
 	}
 	if !allowed[input.Status] {
-		return errors.New("invalid status value")
+		return errors.New("Invalid status value")
 	}
 
 	var user model.User
 	if err := database.DB.Where("school_id = ?", input.SchoolID).First(&user).Error; err != nil {
-		return errors.New("user not found")
+		return errors.New("User not found")
 	}
 
+	prevStatus := user.Status
 	user.Status = input.Status
 
 	if err := database.DB.Save(&user).Error; err != nil {
-		return errors.New("failed to update user status")
+		return errors.New("Failed to update user status")
+	}
+
+	fullName := user.FirstName + " " + user.LastName
+	switch {
+	case input.Status == "Locked" && prevStatus != "Locked" && input.Reason != "":
+		go utils.SendManualLockEmail(user.Email, fullName, input.Reason)
+	case input.Status == "Archived" && prevStatus != "Archived" && input.Reason != "":
+		go utils.SendArchiveEmail(user.Email, fullName, input.Reason)
+	case input.Status == "Active" && prevStatus == "Locked":
+		go utils.SendAccountUnlockedEmail(user.Email, fullName)
+	case input.Status == "Active" && prevStatus == "Archived":
+		go utils.SendAccountUnarchivedEmail(user.Email, fullName)
 	}
 
 	return nil

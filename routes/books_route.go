@@ -10,6 +10,6 @@ func SetupBooks(api fiber.Router) {
 	books := api.Group("/books")
 	books.Get("/getBooks", handler.GetAllBooks)
 	books.Post("/addBook", handler.AddBookHandler)
-	books.Put("/:id", handler.UpdateBookHandler)
-	books.Delete("/:id", handler.DeleteBook)
+	books.Put("/updateBook/:id", handler.UpdateBookHandler)
+	books.Delete("/deleteBook/:id", handler.DeleteBook)
 }

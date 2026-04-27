@@ -30,7 +30,7 @@ func ConnectDB() {
 		log.Fatal("Failed to connect to database. Check your .env file! Error: ", err)
 	}
 
-	fmt.Println("✅ Database connected successfully!")
+	fmt.Println("Database connected successfully!")
 
 	DB = db
 }

@@ -24,8 +24,6 @@ func GetStudentConversation(c *fiber.Ctx) error {
 	if result.Error != nil {
 		convo = model.Conversation{
 			StudentID: studentID,
-			Status:    "Open",
-			Subject:   "General Support",
 		}
 		database.DB.Create(&convo)
 	}
