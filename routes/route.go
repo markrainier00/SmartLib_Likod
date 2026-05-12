@@ -31,4 +31,5 @@ func Setup(app *fiber.App) {
 	chat.Get("/student/:student_id", handler.GetStudentConversation)
 	chat.Post("/send", handler.SendMessage)
 	chat.Post("/read", handler.MarkMessagesAsRead)
+	chat.Get("/events", handler.SSEHandler)
 }

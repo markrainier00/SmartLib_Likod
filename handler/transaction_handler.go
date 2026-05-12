@@ -361,6 +361,49 @@ func RejectBorrowRequestHandler(c *fiber.Ctx) error {
 	})
 }
 
+func AddBookBorrowHandler(c *fiber.Ctx) error {
+	var input services.AddBookBorrowInput
+
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   status.RetCode404,
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	if input.SchoolID == "" || input.ISBN == "" || input.Staff == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(errormodel.ErrorModel{
+			Message:   status.RetCode401,
+			IsSuccess: false,
+			Error:     nil,
+		})
+	}
+
+	if err := services.AddBookBorrowService(input); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   err.Error(),
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	var book model.Book
+	title := input.ISBN
+	if err := database.DB.Where("isbn = ?", input.ISBN).First(&book).Error; err == nil {
+		title = book.Title
+	}
+
+	msg := fmt.Sprintf("BOOK BORROWED: You have successfully borrowed the book \"%s\". Please return it on or before the due date.", title)
+	sendStudentNotification(input.SchoolID, msg)
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Book borrow added.",
+		Data:    nil,
+	})
+}
+
 func ProcessBookBorrowHandler(c *fiber.Ctx) error {
 	var input services.ProcessBookBorrowInput
 
@@ -420,7 +463,7 @@ func GetAllTransactions(c *fiber.Ctx) error {
 func GetStaffHistory(c *fiber.Ctx) error {
 	var history []model.TransactionHistory
 
-	if err := database.DB.Order("date ASC").Where("event != ?", "Request").Find(&history).Error; err != nil {
+	if err := database.DB.Order("date DESC").Where("event != ?", "Request").Find(&history).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"retCode":   "500",
 			"isSuccess": false,

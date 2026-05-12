@@ -5,9 +5,11 @@ import (
 	"os"
 	"time"
 
+	"SmartLib_Likod/model"
 	errormodel "SmartLib_Likod/model/error"
 	"SmartLib_Likod/model/response"
 	"SmartLib_Likod/model/status"
+	"SmartLib_Likod/repositories"
 	"SmartLib_Likod/services"
 
 	"github.com/gofiber/fiber/v2"
@@ -241,6 +243,22 @@ func Signin(c *fiber.Ctx) error {
 
 	user, err := services.SigninUser(input)
 	if err != nil {
+		var schoolID string
+		var role string
+		if existing, lookupErr := repositories.FindUserByEmailOrSchoolID(input.Identifier, input.Identifier); lookupErr == nil {
+			schoolID = existing.SchoolID
+			role = existing.Role
+		}
+
+		repositories.CreateSigninHistory(&model.SigninHistory{
+			SchoolID:   schoolID,
+			Identifier: input.Identifier,
+			Role:       role,
+			Status:     "failed",
+			Reason:     err.Error(),
+			SigninAt:   time.Now(),
+		})
+
 		return c.Status(fiber.StatusUnauthorized).JSON(errormodel.ErrorModel{
 			Message:   err.Error(),
 			IsSuccess: false,
@@ -248,11 +266,20 @@ func Signin(c *fiber.Ctx) error {
 		})
 	}
 
+	repositories.CreateSigninHistory(&model.SigninHistory{
+		SchoolID:   user.SchoolID,
+		Identifier: input.Identifier,
+		Role:       user.Role,
+		Status:     "success",
+		Reason:     "",
+		SigninAt:   time.Now(),
+	})
+
 	claims := jwt.MapClaims{
 		"id":    user.ID,
 		"email": user.Email,
 		"role":  user.Role,
-		"exp":   time.Now().Add(24 * time.Hour).Unix(), // expires in 24 hours
+		"exp":   time.Now().Add(24 * time.Hour).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

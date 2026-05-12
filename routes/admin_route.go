@@ -21,6 +21,7 @@ func SetupAdminRoutes(api fiber.Router) {
 	admin.Get("/studentUsers", handler.GetStudentUsers)
 	admin.Get("/specificUser/:school_id", handler.GetSpecificUser)
 	admin.Put("/status", handler.UpdateUserStatus)
+	admin.Get("/signin-history", handler.GetSigninHistory)
 
 	admin.Put("/approve", handler.ApproveUser)
 	admin.Put("/reject", handler.RejectUser)

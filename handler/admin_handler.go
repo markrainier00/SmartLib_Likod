@@ -11,6 +11,7 @@ import (
 	errormodel "SmartLib_Likod/model/error"
 	"SmartLib_Likod/model/response"
 	"SmartLib_Likod/model/status"
+	"SmartLib_Likod/repositories"
 	"SmartLib_Likod/services"
 
 	"github.com/gofiber/fiber/v2"
@@ -482,6 +483,23 @@ func GetInformationChange(c *fiber.Ctx) error {
 	})
 }
 
+func GetSigninHistory(c *fiber.Ctx) error {
+	history, err := repositories.GetAllSigninHistory()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
+			Message:   "Could not retrieve signin history",
+			IsSuccess: false,
+			Error:     err,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(response.ResponseModel{
+		RetCode: "200",
+		Message: "Signin history retrieved",
+		Data:    history,
+	})
+}
+
 type MonthlyData struct {
 	M   string `json:"m"`
 	Val int    `json:"val"`
@@ -495,9 +513,8 @@ type CategoryData struct {
 
 type TopBookData struct {
 	Title   string `json:"title"`
-	Author  string `json:"author"`
+	ISBN    string `json:"isbn"`
 	Borrows int    `json:"borrows"`
-	Emoji   string `json:"emoji"`
 }
 
 func GetAnalyticsFullHandler(c *fiber.Ctx) error {
@@ -533,7 +550,7 @@ func GetAnalyticsFullHandler(c *fiber.Ctx) error {
 	database.DB.Model(&model.Book{}).
 		Select("COALESCE(SUM(available), 0)").
 		Scan(&totalAvailable)
-	activeBorrows := totalBooks - (totalReserved + totalAvailable)
+	activeBorrows := totalBooks - totalAvailable
 
 	var totalStudents int64
 	database.DB.Model(&model.User{}).
@@ -553,9 +570,9 @@ func GetAnalyticsFullHandler(c *fiber.Ctx) error {
 
 	switch view {
 	case "daily":
-		database.DB.Model(&model.Transaction{}).
-			Select("TO_CHAR(created_at, 'YYYY-MM-DD') as label, count(*) as total").
-			Where("created_at BETWEEN ? AND ?", from, to).
+		database.DB.Model(&model.TransactionHistory{}).
+			Select("TO_CHAR(date, 'YYYY-MM-DD') as label, count(*) as total").
+			Where("event = ? AND date BETWEEN ? AND ?", "Borrow", from, to).
 			Group("label").
 			Order("label asc").
 			Scan(&rawResults)
@@ -573,9 +590,9 @@ func GetAnalyticsFullHandler(c *fiber.Ctx) error {
 		}
 
 	case "yearly":
-		database.DB.Model(&model.Transaction{}).
-			Select("TO_CHAR(created_at, 'YYYY') as label, count(*) as total").
-			Where("created_at BETWEEN ? AND ?", from, to).
+		database.DB.Model(&model.TransactionHistory{}).
+			Select("TO_CHAR(date, 'YYYY') as label, count(*) as total").
+			Where("event = ? AND date BETWEEN ? AND ?", "Borrow", from, to).
 			Group("label").
 			Order("label asc").
 			Scan(&rawResults)
@@ -590,11 +607,11 @@ func GetAnalyticsFullHandler(c *fiber.Ctx) error {
 		}
 
 	default: // monthly
-		database.DB.Model(&model.Transaction{}).
-			Select("TO_CHAR(created_at, 'Mon') as label, count(*) as total").
-			Where("created_at BETWEEN ? AND ?", from, to).
+		database.DB.Model(&model.TransactionHistory{}).
+			Select("TO_CHAR(date, 'Mon') as label, count(*) as total").
+			Where("event = ? AND date BETWEEN ? AND ?", "Borrow", from, to).
 			Group("label").
-			Order("MIN(created_at) asc").
+			Order("MIN(date) asc").
 			Scan(&rawResults)
 
 		allMonths := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
@@ -640,11 +657,10 @@ func GetAnalyticsFullHandler(c *fiber.Ctx) error {
 		totalCatCount += cat.Count
 	}
 
-	colors := []string{"#3d8bef", "#7c3aed", "#4caf6e", "#f59e0b", "#ec4899", "#06b6d4", "#f97316"}
 	var categories []CategoryData
 
 	if len(catCounts) > 0 {
-		for i, cat := range catCounts {
+		for _, cat := range catCounts {
 			pct := 0
 			if totalCatCount > 0 {
 				pct = int((float64(cat.Count) / float64(totalCatCount)) * 100)
@@ -654,14 +670,13 @@ func GetAnalyticsFullHandler(c *fiber.Ctx) error {
 				catName = "Uncategorized"
 			}
 			categories = append(categories, CategoryData{
-				Cat:   catName,
-				Pct:   pct,
-				Color: colors[i%len(colors)],
+				Cat: catName,
+				Pct: pct,
 			})
 		}
 	} else {
 		categories = []CategoryData{
-			{Cat: "General", Pct: 0, Color: "#3d8bef"},
+			{Cat: "General", Pct: 0},
 		}
 	}
 
@@ -673,12 +688,11 @@ func GetAnalyticsFullHandler(c *fiber.Ctx) error {
 		Count int
 	}
 
-	database.DB.Model(&model.Transaction{}).
+	database.DB.Model(&model.TransactionHistory{}).
 		Select("isbn, count(*) as count").
-		Where("created_at BETWEEN ? AND ?", from, to).
+		Where("event = ? AND date BETWEEN ? AND ?", "Borrow", from, to).
 		Group("isbn").
 		Order("count desc").
-		Limit(5).
 		Scan(&topBorrows)
 
 	var top []TopBookData
@@ -691,9 +705,8 @@ func GetAnalyticsFullHandler(c *fiber.Ctx) error {
 		}
 		top = append(top, TopBookData{
 			Title:   title,
-			Author:  book.Author,
+			ISBN:    book.ISBN,
 			Borrows: tb.Count,
-			Emoji:   "📖",
 		})
 	}
 

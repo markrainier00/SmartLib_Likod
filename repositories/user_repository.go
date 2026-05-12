@@ -31,6 +31,20 @@ func FindUserByEmailOrSchoolID(email, school_id string) (*model.User, error) {
 	return &user, result.Error
 }
 
+func CreateSigninHistory(entry *model.SigninHistory) error {
+	return database.DB.Create(entry).Error
+}
+
+func GetSigninHistoryByUserID(userID uint, limit int) ([]model.SigninHistory, error) {
+	var history []model.SigninHistory
+	result := database.DB.
+		Where("user_id = ?", userID).
+		Order("signin_at DESC").
+		Limit(limit).
+		Find(&history)
+	return history, result.Error
+}
+
 // Deletes old OTP for user that wants to create new OTP before saving it
 func CreateOTPCode(code *model.OTPCode) error {
 	database.DB.Where("email = ? AND used = false", code.Email).Delete(&model.OTPCode{})

@@ -39,3 +39,13 @@ type InformationChangeRequest struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
+
+type SigninHistory struct {
+	ID         uint      `json:"id" gorm:"primaryKey;"`
+	SchoolID   string    `json:"school_id"`
+	Identifier string    `json:"identifier"`
+	Role       string    `json:"role"`
+	Status     string    `json:"status"`
+	Reason     string    `json:"reason"`
+	SigninAt   time.Time `json:"login_at"`
+}

@@ -164,6 +164,15 @@ func ApproveBorrowRequestService(input ApproveBorrowRequestInput) error {
 			return fmt.Errorf("User not found")
 		}
 
+		var activeBorrows int64
+		tx.Model(&model.Transaction{}).
+			Where("school_id = ? AND status IN ?", input.SchoolID, []string{"Borrowed", "Approved"}).
+			Count(&activeBorrows)
+
+		if activeBorrows >= 3 {
+			return fmt.Errorf("Borrow limit reached. %s already has 3 active or approved borrows.", user.FirstName)
+		}
+
 		if err := tx.First(&transaction, input.TransactionID).Error; err != nil {
 			return fmt.Errorf("Request not found")
 		}
@@ -266,6 +275,86 @@ func RejectBorrowRequestService(input RejectBorrowRequestInput) error {
 	})
 }
 
+type AddBookBorrowInput struct {
+	SchoolID   string    `json:"school_id"`
+	ISBN       string    `json:"isbn"`
+	BorrowDate time.Time `json:"borrow_date"`
+	ReturnDate time.Time `json:"return_date"`
+	Staff      string    `json:"staff"`
+}
+
+func AddBookBorrowService(input AddBookBorrowInput) error {
+	var book model.Book
+	var user model.User
+
+	if input.ReturnDate.Before(time.Now().Truncate(24 * time.Hour)) {
+		return fmt.Errorf("The selected return date is invalid. It must not be earlier than today.")
+	}
+
+	today := time.Now().Truncate(24 * time.Hour)
+	maxDate := today.AddDate(0, 0, 7)
+
+	if input.ReturnDate.After(maxDate) {
+		return fmt.Errorf("The selected return date is invalid. It must not be more than 7 days from today.")
+	}
+
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+
+		if err := tx.Where("school_id = ?", input.SchoolID).First(&user).Error; err != nil {
+			return fmt.Errorf("User not found")
+		}
+
+		var activeBorrows int64
+		tx.Model(&model.Transaction{}).
+			Where("school_id = ? AND status = ?", input.SchoolID, "Borrowed").
+			Count(&activeBorrows)
+
+		if activeBorrows >= 3 {
+			return fmt.Errorf("Borrow limit reached. %s already has 3 active borrows.", user.FirstName)
+		}
+
+		if err := tx.Where("isbn = ?", input.ISBN).First(&book).Error; err != nil {
+			return fmt.Errorf("Book not found")
+		}
+
+		if book.Available <= 0 {
+			return fmt.Errorf("No available copies for \"%s\".", book.Title)
+		}
+
+		transaction := model.Transaction{
+			SchoolID:   input.SchoolID,
+			ISBN:       input.ISBN,
+			Status:     "Borrowed",
+			BorrowDate: input.BorrowDate,
+			ReturnDate: input.ReturnDate,
+		}
+
+		if err := tx.Create(&transaction).Error; err != nil {
+			return err
+		}
+
+		book.Available -= 1
+		if err := tx.Save(&book).Error; err != nil {
+			return err
+		}
+
+		history := model.TransactionHistory{
+			TransactionID: transaction.ID,
+			SchoolID:      input.SchoolID,
+			ISBN:          input.ISBN,
+			Event:         "Borrow",
+			Staff:         input.Staff,
+			Date:          time.Now(),
+		}
+
+		if err := tx.Create(&history).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
 func ProcessBookBorrowService(input ProcessBookBorrowInput) error {
 	var transaction model.Transaction
 	var book model.Book
@@ -286,6 +375,15 @@ func ProcessBookBorrowService(input ProcessBookBorrowInput) error {
 
 		if err := tx.Where("school_id = ?", input.SchoolID).First(&user).Error; err != nil {
 			return fmt.Errorf("User not found")
+		}
+
+		var activeBorrows int64
+		tx.Model(&model.Transaction{}).
+			Where("school_id = ? AND status = ?", input.SchoolID, "Borrowed").
+			Count(&activeBorrows)
+
+		if activeBorrows >= 3 {
+			return fmt.Errorf("Borrow limit reached. %s already has 3 active borrows.", user.FirstName)
 		}
 
 		if err := tx.First(&transaction, input.TransactionID).Error; err != nil {

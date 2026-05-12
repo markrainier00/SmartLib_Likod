@@ -26,7 +26,7 @@ func SetupTransactionRoutes(api fiber.Router) {
 	transactions.Get("/getApprovedRequests", handler.GetApprovedRequestsHandler)
 	transactions.Put("/returnBook/:id", handler.ReturnBookHandler)
 	transactions.Put("/borrow/process", handler.ProcessBookBorrowHandler)
-	// transactions.Post("/borrow/add", handler.AddBookBorrowHandler)
+	transactions.Post("/borrow/add", handler.AddBookBorrowHandler)
 	transactions.Get("/details/:school_id", handler.GetStudentTransaction)
 	transactions.Get("/allDetails/:school_id", handler.GetStudentAllTransaction)
 	transactions.Get("/history/:school_id", handler.GetStudentHistory)

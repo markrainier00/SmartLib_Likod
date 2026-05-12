@@ -65,3 +65,11 @@ func GetRegistrationHistory() ([]model.RegistrationRequest, error) {
 	result := database.DB.Order("actioned_at desc").Find(&history)
 	return history, result.Error
 }
+
+func GetAllSigninHistory() ([]model.SigninHistory, error) {
+	var history []model.SigninHistory
+	result := database.DB.
+		Order("signin_at DESC").
+		Find(&history)
+	return history, result.Error
+}
