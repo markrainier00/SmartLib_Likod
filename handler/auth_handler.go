@@ -164,8 +164,13 @@ func RegisterUserHandler(c *fiber.Ctx) error {
 			ContentType: &file.Header["Content-Type"][0],
 		})
 		if err != nil {
+			// ==================================================
+			// 🚨 ITO YUNG IDINAGDAG NATIN PARA SA ERROR NG SUPABASE
+			// ==================================================
+			fmt.Println("🚨 SUPABASE UPLOAD ERROR:", err.Error())
+
 			return c.Status(fiber.StatusInternalServerError).JSON(errormodel.ErrorModel{
-				Message:   "Failed to upload image",
+				Message:   "Supabase Error: " + err.Error(),
 				IsSuccess: false,
 				Error:     err,
 			})
